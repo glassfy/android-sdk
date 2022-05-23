@@ -23,12 +23,14 @@ internal data class TransactionResponse(
     @field:Json(name = "error")
     val error: ErrorDto?
 ) {
-    internal fun toPermissions() = Transaction(
+    internal fun toTransaction() = Transaction(
         Permissions(
             originalApplicationVersion ?: "",
             originalPurchaseDate ?: "",
             subscriberId ?: "",
-            (permissions ?: emptyList()).map { it.toPermission() })
+            (permissions ?: emptyList()).map { it.toPermission() },
+            ""
+        )
     )
 }
 

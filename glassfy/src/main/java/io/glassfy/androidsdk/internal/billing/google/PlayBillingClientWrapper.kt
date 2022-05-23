@@ -73,7 +73,8 @@ internal class PlayBillingClientWrapper(
                             ?.also { c -> c.resume(PlayBillingResource.Success(purchase)) }
                     }
             }
-        } else {
+        }
+        else {
             Logger.logDebug("handlePurchasesUpdate result error - code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
 
             val callbacks: MutableIterator<MutableMap.MutableEntry<String, Continuation<PlayBillingResource<Purchase>>>> =
@@ -138,19 +139,19 @@ internal class PlayBillingClientWrapper(
                 return@withClientReady PlayBillingResource.Error(inApp.billingResult)
             }
 
-            val subs = SkuDetailsParams.newBuilder()
-                .setSkusList(skuList.toList())
-                .setType(SUBS)
-                .build().let {
-                    billingClient.querySkuDetails(it)
-                }
-
-            if (!subs.billingResult.isOk()) {
-                return@withClientReady PlayBillingResource.Error(inApp.billingResult)
+        val subs = SkuDetailsParams.newBuilder()
+            .setSkusList(skuList.toList())
+            .setType(SUBS)
+            .build().let {
+                billingClient.querySkuDetails(it)
             }
 
-            return@withClientReady PlayBillingResource.Success(inApp.skuDetailsList.orEmpty() + subs.skuDetailsList.orEmpty())
+        if (!subs.billingResult.isOk()) {
+            return@withClientReady PlayBillingResource.Error(inApp.billingResult)
         }
+
+            return@withClientReady PlayBillingResource.Success(inApp.skuDetailsList.orEmpty() + subs.skuDetailsList.orEmpty())
+    }
 
     internal suspend fun purchaseSku(
         activity: Activity,
@@ -198,7 +199,7 @@ internal class PlayBillingClientWrapper(
             } else {
                 return@withClientReady PlayBillingResource.Error(res)
             }
-        }
+    }
 
     //    Consumes a given in-app product.
     internal suspend fun consumeToken(purchaseToken: String): PlayBillingResource<String?> =
@@ -237,7 +238,7 @@ internal class PlayBillingClientWrapper(
         withContext(Dispatchers.Main) {
             Logger.logDebug("purchaseSku - 1 - ${Thread.currentThread().name}")
             billingClient.launchBillingFlow(activity, params)
-        }.takeIf { !it.isOk() }
+        }.takeIf  { !it.isOk() }
             ?.let {
                 Logger.logDebug("purchaseSku - 2 fail - ${Thread.currentThread().name}")
                 purchasingSku.remove(sku.sku)
@@ -296,7 +297,7 @@ internal class PlayBillingClientWrapper(
 
     private suspend fun startConnection(): BillingResult {
         billingConnectionMutex.withLock {
-            return suspendCoroutine { c ->
+            return suspendCancellableCoroutine { c ->
                 billingClient.startConnection(object : BillingClientStateListener {
                     override fun onBillingSetupFinished(billingResult: BillingResult) {
                         Logger.logDebug("onBillingSetupFinished code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
@@ -305,7 +306,7 @@ internal class PlayBillingClientWrapper(
                             billingClient.endConnection()
                         }
 
-                        if (c.context.isActive) {
+                        if (c.isActive && c.context.isActive) {
                             c.resume(billingResult)
                         }
                     }

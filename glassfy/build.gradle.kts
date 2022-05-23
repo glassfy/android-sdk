@@ -48,6 +48,7 @@ android {
         resources.excludes += "DebugProbesKt.bin"
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+    namespace = "io.glassfy.androidsdk"
 
     publishing {
         // To publish just one variant, use singleVariant to publish only release

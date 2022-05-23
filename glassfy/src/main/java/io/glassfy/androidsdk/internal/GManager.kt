@@ -21,10 +21,11 @@ import io.glassfy.androidsdk.internal.device.DeviceManager
 import io.glassfy.androidsdk.internal.device.IDeviceManager
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.internal.network.IApiService
+import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
 import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
 import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
-import io.glassfy.androidsdk.internal.network.model.utils.EntitlementAdapter
-import io.glassfy.androidsdk.internal.network.model.utils.Resource
+import io.glassfy.androidsdk.internal.network.model.request.UserPropertiesRequest
+import io.glassfy.androidsdk.internal.network.model.utils.*
 import io.glassfy.androidsdk.internal.repository.IRepository
 import io.glassfy.androidsdk.internal.repository.Repository
 import io.glassfy.androidsdk.model.*
@@ -138,12 +139,20 @@ internal class GManager : LifecycleEventObserver {
         }
 
     internal suspend fun permissions(): Resource<Permissions> =
-        withSdkInitializedOrError { repository.permissions() }
+        withSdkInitializedOrError {
+            repository.permissions().apply {
+                data?.installationId_ = cacheManager.installationId
+            }
+        }
 
-    internal suspend fun restore(): Resource<Permissions> = withSdkInitializedOrError { _restore() }
+    internal suspend fun restore(): Resource<Permissions> =
+        withSdkInitializedOrError { _restore() }
 
     internal suspend fun sku(identifier: String): Resource<Sku> =
-        withSdkInitializedOrError { _sku(identifier) }
+        withSdkInitializedOrError { _playstoresku(identifier) }
+
+    internal suspend fun skubase(identifier: String, store: Store): Resource<out ISkuBase> =
+        withSdkInitializedOrError { _skubase(identifier, store) }
 
     internal suspend fun skuWithProductId(identifier: String): Resource<Sku> =
         withSdkInitializedOrError { _skuWithProductId(identifier) }
@@ -151,13 +160,37 @@ internal class GManager : LifecycleEventObserver {
     internal suspend fun offerings(): Resource<Offerings> =
         withSdkInitializedOrError { _offerings() }
 
+    internal suspend fun connectCustomSubscriber(customId: String?): Resource<Unit> =
+        withSdkInitializedOrError { _connectCustomSubscriber(customId) }
+
+    internal suspend fun connectPaddleLicenseKey(
+        licenseKey: String,
+        force: Boolean
+    ): Resource<Unit> =
+        withSdkInitializedOrError { _connectPaddleLicense(licenseKey, force) }
+
+    internal suspend fun storeInfo(): Resource<StoresInfo> =
+        withSdkInitializedOrError { repository.storeInfo() }
+
+
+    internal suspend fun setDeviceToken(token: String?): Resource<Unit> =
+        withSdkInitializedOrError { repository.setUserProperty(UserPropertiesRequest.Token(token)) }
+
+    internal suspend fun setEmailUserProperty(email: String?): Resource<Unit> =
+        withSdkInitializedOrError { repository.setUserProperty(UserPropertiesRequest.Email(email)) }
+
+    internal suspend fun setExtraUserProperty(extra: Map<String, String>?): Resource<Unit> =
+        withSdkInitializedOrError { repository.setUserProperty(UserPropertiesRequest.Extra(extra)) }
+
+    internal suspend fun getUserProperties(): Resource<UserProperties> =
+        withSdkInitializedOrError { repository.getUserProperty() }
 
     /// Impl
 
     private suspend fun _initialize(): Resource<Boolean> {
         state.emit(SdkState.Initializing)
 
-        val inappHRes = billingService.subsPurchaseHistory()
+        val inappHRes = billingService.inAppPurchaseHistory()
         if (inappHRes.err != null) {
             state.emit(SdkState.Failed)
             return Resource.Error(inappHRes.err)
@@ -171,8 +204,8 @@ internal class GManager : LifecycleEventObserver {
 
         val initReq = InitializeRequest.from(
             packageName ?: "",
-            inappHRes.data.orEmpty(),
-            subsHRes.data.orEmpty()
+            subsHRes.data.orEmpty(),
+            inappHRes.data.orEmpty()
         )
         val serverInfo = repository.initialize(initReq)
         if (serverInfo.err != null) {
@@ -180,9 +213,12 @@ internal class GManager : LifecycleEventObserver {
             return Resource.Error(serverInfo.err)
         }
 
-        serverInfo.data?.subscriberId?.let {
-            cacheManager.subscriberId = it
+        val subscriberId = serverInfo.data?.subscriberId
+        if (subscriberId.isNullOrEmpty()) {
+            state.emit(SdkState.Failed)
+            return Resource.Error(GlassfyErrorCode.SDKNotInitialized.toError("SubscriberId cannot be found"))
         }
+        cacheManager.subscriberId = subscriberId
 
         // consume/ack purchases
         if (!watcherMode) {
@@ -219,7 +255,7 @@ internal class GManager : LifecycleEventObserver {
         if (detailRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
 
         for (o in offRes.data.all) {
-            o.skus = o.skus.filter { sku -> detailRes.data.map { it.sku }.contains(sku.productId) }
+            o.skus_ = o.skus.filter { sku -> detailRes.data.map { it.sku }.contains(sku.productId) }
                 .map { s ->
                     detailRes.data
                         .find { detail -> detail.sku == s.productId }
@@ -258,24 +294,37 @@ internal class GManager : LifecycleEventObserver {
 
         return result.data.let { p ->
             val tokenReq = TokenRequest.from(p, sku.product.type == BillingClient.SkuType.SUBS)
-            repository.token(tokenReq)
+            repository.token(tokenReq).apply {
+                data?.permissions?.installationId_ = cacheManager.installationId
+            }
         }
     }
 
     private suspend fun _restore(): Resource<Permissions> {
-        val inappHistoryRes = billingService.subsPurchaseHistory()
+        val inappHistoryRes = billingService.inAppPurchaseHistory()
         if (inappHistoryRes.err != null) return Resource.Error(inappHistoryRes.err)
 
-        val subsHistoryRes = billingService.inAppPurchaseHistory()
+        val subsHistoryRes = billingService.subsPurchaseHistory()
         if (subsHistoryRes.err != null) return Resource.Error(subsHistoryRes.err)
 
         return repository.restoreTokens(
-            inappHistoryRes.data.orEmpty(),
-            subsHistoryRes.data.orEmpty()
+            subsHistoryRes.data.orEmpty(),
+            inappHistoryRes.data.orEmpty()
         )
     }
 
-    private suspend fun _sku(identifier: String): Resource<Sku> {
+    private suspend fun _skubase(identifier: String, store: Store): Resource<out ISkuBase> {
+        if (store == Store.PlayStore) {
+            return _playstoresku(identifier)
+        }
+
+        val skuRes = repository.skuByIdentifierAndStore(identifier, store)
+        if (skuRes.err != null) return skuRes
+        if (skuRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
+        return Resource.Success(skuRes.data)
+    }
+
+    private suspend fun _playstoresku(identifier: String): Resource<Sku> {
         val skuRes = repository.skuByIdentifier(identifier)
         if (skuRes.err != null) return skuRes
         if (skuRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
@@ -305,11 +354,20 @@ internal class GManager : LifecycleEventObserver {
                 GlassfyErrorCode.NotFoundOnStore.toError()
             )
 
-
             Resource.Success(it.apply {
                 product = detailRes.data.first()
             })
         }
+    }
+
+    private suspend fun _connectCustomSubscriber(customId: String?): Resource<Unit> {
+        val res = repository.connectCustomSubscriber(ConnectRequest.customSubscriber(customId))
+        return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
+    }
+
+    private suspend fun _connectPaddleLicense(licenseKey: String, force: Boolean): Resource<Unit> {
+        val res = repository.connectPaddleLicense(ConnectRequest.paddleLicense(licenseKey, force))
+        return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
 
@@ -356,6 +414,9 @@ internal class GManager : LifecycleEventObserver {
 
         val moshi = Moshi.Builder()
             .add(EntitlementAdapter())
+            .add(StoreAdapter())
+            .add(StoreInfoAdapter())
+            .add(UserPropertiesAdapter())
             // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
             .build()
 

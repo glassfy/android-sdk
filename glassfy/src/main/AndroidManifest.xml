@@ -1,4 +1,4 @@
-<manifest package="io.glassfy.androidsdk">
+<manifest>
 
-    <application></application>
+    <application />
 </manifest>

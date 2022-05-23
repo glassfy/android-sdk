@@ -5,13 +5,13 @@ import com.squareup.moshi.ToJson
 import io.glassfy.androidsdk.model.Entitlement
 
 internal class EntitlementAdapter {
-    @ToJson
-    private fun toJson(enum: Entitlement): Int {
-        return enum.value
-    }
+        @ToJson
+        private fun toJson(enum: Entitlement): Int {
+            return enum.value
+        }
 
-    @FromJson
-    fun fromJson(value: Int): Entitlement {
-        return Entitlement.fromValue(value)
-    }
+        @FromJson
+        fun fromJson(value: Int): Entitlement {
+            return Entitlement.fromValue(value)
+        }
 }

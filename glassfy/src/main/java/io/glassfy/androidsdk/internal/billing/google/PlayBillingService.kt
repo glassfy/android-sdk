@@ -59,23 +59,21 @@ internal class PlayBillingService(ctx: Context, watcherMode: Boolean = false) : 
                 }
             }
 
-    override suspend fun subsPurchases(): Resource<List<Purchase>> =
-        billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.SUBS))
-            .let {
-                return when (it) {
-                    is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
-                    else -> Resource.Error(convertError(it.err!!))
-                }
+    override suspend fun subsPurchases(): Resource<List<Purchase>> = billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.SUBS))
+        .let {
+            return when (it) {
+                is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
+                else -> Resource.Error(convertError(it.err!!))
             }
+        }
 
-    override suspend fun inAppPurchases(): Resource<List<Purchase>> =
-        billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.INAPP))
-            .let {
-                return when (it) {
-                    is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
-                    else -> Resource.Error(convertError(it.err!!))
-                }
+    override suspend fun inAppPurchases(): Resource<List<Purchase>> = billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.INAPP))
+        .let {
+            return when (it) {
+                is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
+                else -> Resource.Error(convertError(it.err!!))
             }
+        }
 
     override suspend fun skuDetails(skuList: Set<String>): Resource<List<SkuDetails>> =
         billingClientWrapper.querySkuDetails(skuList)
@@ -106,7 +104,7 @@ internal class PlayBillingService(ctx: Context, watcherMode: Boolean = false) : 
                 return when (it) {
                     is PlayBillingResource.Success -> Resource.Success(purchaseToken)
                     else -> Resource.Error(convertError(it.err!!))
-                }
+            }
             }
 
     override suspend fun acknowledge(purchaseToken: String): Resource<String?> =
@@ -138,68 +136,63 @@ internal class PlayBillingService(ctx: Context, watcherMode: Boolean = false) : 
                 signature,
                 skus,
                 hashCode(),
+                originalJson)
+        }
+
+    private fun convertPurchases(ps: List<com.android.billingclient.api.Purchase>) = ps.map { convertPurchase(it) }
+
+    private fun convertPurchase(p: com.android.billingclient.api.Purchase) = p.run {
+            Purchase(
+                convertAccountIdentifier(accountIdentifiers),
+                developerPayload,
+                orderId,
+                packageName,
+                purchaseState,
+                purchaseTime,
+                purchaseToken,
+                quantity,
+                signature,
+                skus,
+                hashCode(),
+                isAcknowledged,
+                isAutoRenewing,
                 originalJson
             )
         }
 
-    private fun convertPurchases(ps: List<com.android.billingclient.api.Purchase>) =
-        ps.map { convertPurchase(it) }
-
-    private fun convertPurchase(p: com.android.billingclient.api.Purchase) = p.run {
-        Purchase(
-            convertAccountIdentifier(accountIdentifiers),
-            developerPayload,
-            orderId,
-            packageName,
-            purchaseState,
-            purchaseTime,
-            purchaseToken,
-            quantity,
-            signature,
-            skus,
-            hashCode(),
-            isAcknowledged,
-            isAutoRenewing,
-            originalJson
-        )
-    }
-
-    private fun convertAccountIdentifier(a: com.android.billingclient.api.AccountIdentifiers?) =
-        a?.run {
+    private fun convertAccountIdentifier(a: com.android.billingclient.api.AccountIdentifiers?) = a?.run{
             AccountIdentifiers(
                 obfuscatedAccountId,
-                obfuscatedProfileId
-            )
+                obfuscatedProfileId)
         }
 
     private fun convertToSkuDetails(s: SkuDetails) = s.run {
-        com.android.billingclient.api.SkuDetails(originalJson)
-    }
+            com.android.billingclient.api.SkuDetails(originalJson)
+        }
 
-    private fun convertSkusDetails(ps: List<com.android.billingclient.api.SkuDetails>) =
-        ps.map { convertSkuDetails(it) }
+    private fun convertSkusDetails(ps: List<com.android.billingclient.api.SkuDetails>) = ps.map { convertSkuDetails(it) }
 
     private fun convertSkuDetails(s: com.android.billingclient.api.SkuDetails) = s.run {
-        SkuDetails(
-            description,
-            freeTrialPeriod,
-            iconUrl,
-            introductoryPrice,
-            introductoryPriceAmountMicros,
-            introductoryPriceCycles,
-            introductoryPricePeriod,
-            originalPrice,
-            originalPriceAmountMicros,
-            price,
-            priceAmountMicros,
-            priceCurrencyCode,
-            sku,
-            subscriptionPeriod,
-            title,
-            type,
-            hashCode(),
-            originalJson
-        )
+            SkuDetails(
+                description,
+                freeTrialPeriod,
+                iconUrl,
+                introductoryPrice,
+                introductoryPriceAmountMicros,
+                introductoryPriceCycles,
+                introductoryPricePeriod,
+                originalPrice,
+                originalPriceAmountMicros,
+                price,
+                priceAmountMicros,
+                priceCurrencyCode,
+                sku,
+                subscriptionPeriod,
+                title,
+                type,
+                hashCode(),
+                originalJson
+            )
     }
 
     private fun convertError(b: BillingResult): GlassfyError = b.run {

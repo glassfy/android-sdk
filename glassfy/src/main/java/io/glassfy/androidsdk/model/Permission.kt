@@ -4,7 +4,7 @@ data class Permission(
     val permissionId: String,
     val entitlement: Entitlement,
     val expireDate: Long,
-    val accountableSkus: List<String> = emptyList(),
+    val accountableSkus: List<SkuBase> = emptyList(),
 ) {
     val isValid: Boolean by lazy {
         entitlement.value > 0

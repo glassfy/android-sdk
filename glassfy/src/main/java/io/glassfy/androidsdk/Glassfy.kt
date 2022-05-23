@@ -6,6 +6,7 @@ import io.glassfy.androidsdk.BuildConfig.SDK_VERSION
 import io.glassfy.androidsdk.internal.GManager
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
 import io.glassfy.androidsdk.model.Sku
+import io.glassfy.androidsdk.model.Store
 import io.glassfy.androidsdk.model.SubscriptionUpdate
 import kotlinx.coroutines.*
 
@@ -77,6 +78,11 @@ object Glassfy {
         customScope.runAndPostResult(callback) { manager.sku(identifier) }
     }
 
+    @JvmStatic
+    fun sku(identifier: String, store: Store, callback: SkuBaseCallback) {
+        customScope.runAndPostResult(callback) { manager.skubase(identifier, store) }
+    }
+
     /**
      * Fetch Sku
      *
@@ -128,6 +134,76 @@ object Glassfy {
         customScope.runAndPostResult(callback) { manager.purchase(activity, sku, updateSku) }
     }
 
+    /**
+     * Connect custom subscriber
+     *
+     * @param customId Custom subscriber id
+     * @param callback Completion callback
+     *
+     */
+    @JvmStatic
+    fun connectCustomSubscriber(customId: String?, callback: ErrorCallback) {
+        customScope.runAndPostErrResult(callback) { manager.connectCustomSubscriber(customId) }
+    }
+
+    /**
+     * Connect paddle license key
+     *
+     * @param licenseKey Paddle license key
+     * @param force Disconnect license from other subscriber(s) and connect with current subscriber
+     * @param callback Completion callback
+     *
+     * @note  Check error code in GYDomain - GYErrorCodeLicenseAlreadyConnected, GYErrorCodeLicenseInvalid to handle those cases
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun connectPaddleLicenseKey(
+        licenseKey: String,
+        force: Boolean = false,
+        callback: ErrorCallback
+    ) {
+        customScope.runAndPostErrResult(callback) {
+            manager.connectPaddleLicenseKey(
+                licenseKey,
+                force
+            )
+        }
+    }
+
+    @JvmStatic
+    fun storeInfo(callback: StoreCallback) {
+        customScope.runAndPostResult(callback) {
+            manager.storeInfo()
+        }
+    }
+
+    @JvmStatic
+    fun setDeviceToken(token: String?, callback: ErrorCallback) {
+        customScope.runAndPostErrResult(callback) {
+            manager.setDeviceToken(token)
+        }
+    }
+
+    @JvmStatic
+    fun setEmailUserProperty(email: String?, callback: ErrorCallback) {
+        customScope.runAndPostErrResult(callback) {
+            manager.setEmailUserProperty(email)
+        }
+    }
+
+    @JvmStatic
+    fun setExtraUserProperty(extra: Map<String, String>?, callback: ErrorCallback) {
+        customScope.runAndPostErrResult(callback) {
+            manager.setExtraUserProperty(extra)
+        }
+    }
+
+    @JvmStatic
+    fun getUserProperties(callback: UserPropertiesCallback) {
+        customScope.runAndPostResult(callback) {
+            manager.getUserProperties()
+        }
+    }
 
 //  UTILS
 
@@ -138,6 +214,25 @@ object Glassfy {
                 "glassfy"
             )
         )
+    }
+
+    private fun CoroutineScope.runAndPostErrResult(
+        callback: ErrorCallback,
+        block: suspend CoroutineScope.() -> Resource<Unit>
+    ) {
+        launch {
+            val r = block()
+            withContext(Dispatchers.Main) {
+                when (r) {
+                    is Resource.Success -> {
+                        callback.onResult(null)
+                    }
+                    is Resource.Error -> {
+                        callback.onResult(r.err!!)
+                    }
+                }
+            }
+        }
     }
 
     private fun CoroutineScope.runNoResult(block: suspend CoroutineScope.() -> Unit) {

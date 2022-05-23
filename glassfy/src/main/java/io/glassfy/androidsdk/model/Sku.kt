@@ -2,9 +2,12 @@ package io.glassfy.androidsdk.model
 
 
 data class Sku(
-    val skuId: String,
-    val productId: String,
+    override val skuId: String,
+    override val productId: String,
     val extravars: Map<String, String>
-) {
+) : ISkuBase {
+    override val store: Store
+        get() = Store.PlayStore
+
     lateinit var product: SkuDetails
 }

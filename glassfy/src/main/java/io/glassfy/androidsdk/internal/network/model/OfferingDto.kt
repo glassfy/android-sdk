@@ -4,6 +4,7 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import io.glassfy.androidsdk.internal.network.model.utils.DTOException
 import io.glassfy.androidsdk.model.Offering
+import io.glassfy.androidsdk.model.Sku
 
 @JsonClass(generateAdapter = true)
 internal data class OfferingDto(
@@ -15,7 +16,15 @@ internal data class OfferingDto(
     val skus: List<SkuDto>?
 ) {
     @Throws(DTOException::class)
-    internal fun toOffering(): Offering =
-        identifier?.let { Offering(identifier, (skus ?: emptyList()).map { it.toSku() }) }
-            ?: throw DTOException("Missing offering identifier")
+    internal fun toOffering(): Offering {
+        if (identifier == null) {
+            throw DTOException("Missing offering identifier")
+        }
+
+        val skuList = skus?.mapNotNull {
+            val sku = it.toSku()
+            if (sku is Sku) sku else null
+        }
+        return Offering(identifier, skuList ?: emptyList())
+    }
 }

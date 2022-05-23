@@ -2,7 +2,7 @@ package io.glassfy.androidsdk
 
 data class GlassfyError(val code: GlassfyErrorCode, val description: String?, val debug: String?)
 
-enum class GlassfyErrorCode {
+enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
     SDKNotInitialized,
     MissingPurchase,
     PendingPurchase,
@@ -13,6 +13,8 @@ enum class GlassfyErrorCode {
     ProductAlreadyOwned,
 
     ServerError,
+    LicenseAlreadyConnected(1050),
+    LicenseNotFound(1051),
     InternetConnection,
     IOException,
     HttpException,
@@ -36,6 +38,8 @@ enum class GlassfyErrorCode {
             UserCancelPurchase -> "User cancel purchase"
             ProductAlreadyOwned -> "Product already owned"
             ServerError -> "Server error"
+            LicenseAlreadyConnected -> "License already connected"
+            LicenseNotFound -> "License not found"
             InternetConnection -> "Check your internet connection"
             IOException -> "IOException"
             HttpException -> "HttpException"

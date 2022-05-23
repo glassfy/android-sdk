@@ -1,10 +1,12 @@
 package io.glassfy.androidsdk
 
 import androidx.annotation.UiThread
-import io.glassfy.androidsdk.model.Offerings
-import io.glassfy.androidsdk.model.Permissions
-import io.glassfy.androidsdk.model.Sku
-import io.glassfy.androidsdk.model.Transaction
+import io.glassfy.androidsdk.model.*
+
+fun interface ErrorCallback {
+    @UiThread
+    fun onResult(error: GlassfyError?)
+}
 
 fun interface Callback<in T> {
     @UiThread
@@ -17,6 +19,12 @@ fun interface OfferingsCallback : Callback<Offerings>
 
 fun interface SkuCallback : Callback<Sku>
 
+fun interface SkuBaseCallback : Callback<ISkuBase>
+
 fun interface PermissionsCallback : Callback<Permissions>
 
 fun interface InitializeCallback : Callback<Boolean>
+
+fun interface StoreCallback : Callback<StoresInfo>
+
+fun interface UserPropertiesCallback : Callback<UserProperties>

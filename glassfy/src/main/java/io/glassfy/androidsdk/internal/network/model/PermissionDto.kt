@@ -15,7 +15,7 @@ internal data class PermissionDto(
     @field:Json(name = "expires_date")
     val expiresDate: Long?,
     @field:Json(name = "skuarray")
-    val skuarray: List<String>?
+    val skuarray: List<SkuBaseDto>?
 ) {
     @Throws(DTOException::class)
     internal fun toPermission(): Permission {
@@ -27,7 +27,7 @@ internal data class PermissionDto(
             identifier,
             entitlement ?: Entitlement.NeverBuy,
             expiresDate,
-            skuarray ?: emptyList()
+            skuarray?.map { it.toSkuBase() } ?: emptyList()
         )
     }
 

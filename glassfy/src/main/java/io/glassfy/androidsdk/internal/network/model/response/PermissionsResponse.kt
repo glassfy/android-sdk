@@ -8,7 +8,7 @@ import io.glassfy.androidsdk.internal.network.model.utils.DTOException
 import io.glassfy.androidsdk.model.Permissions
 
 @JsonClass(generateAdapter = true)
-internal data class PermissionsResponse(
+internal data class PermissionsResponse (
     @field:Json(name = "permissions")
     val permissions: List<PermissionDto>?,
     @field:Json(name = "original_application_version")
@@ -27,6 +27,7 @@ internal data class PermissionsResponse(
         originalApplicationVersion ?: "",
         originalPurchaseDate ?: "",
         subscriberId ?: "",
-        (permissions ?: emptyList()).map { it.toPermission() }
+        (permissions ?: emptyList()).map { it.toPermission() },
+        ""
     )
 }

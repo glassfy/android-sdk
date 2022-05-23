@@ -1,9 +1,13 @@
 package io.glassfy.androidsdk.model
 
 data class Permissions(
-    var originalApplicationVersion: String,
-    var originalApplicationDate: String,
+    val originalApplicationVersion: String,
+    val originalApplicationDate: String,
     val subscriberId: String,
     val all: List<Permission>,
-)
+
+    internal var installationId_: String
+) {
+    val installationId: String get() = installationId_
+}
 
