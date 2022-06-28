@@ -23,8 +23,8 @@ internal class PlayBillingClientWrapper(
     private val watcherMode: Boolean
 ) {
     companion object {
-        private const val BACKOFF_RECONNECTION_MS = 1500L
-        private const val MAX_RECONNECTION_RETRIES = 3
+        private const val BACKOFF_RECONNECTION_MS = 2000L
+        private const val MAX_RECONNECTION_RETRIES = 5
     }
 
     private val billingClient by lazy {
@@ -73,8 +73,7 @@ internal class PlayBillingClientWrapper(
                             ?.also { c -> c.resume(PlayBillingResource.Success(purchase)) }
                     }
             }
-        }
-        else {
+        } else {
             Logger.logDebug("handlePurchasesUpdate result error - code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
 
             val callbacks: MutableIterator<MutableMap.MutableEntry<String, Continuation<PlayBillingResource<Purchase>>>> =
@@ -139,19 +138,19 @@ internal class PlayBillingClientWrapper(
                 return@withClientReady PlayBillingResource.Error(inApp.billingResult)
             }
 
-        val subs = SkuDetailsParams.newBuilder()
-            .setSkusList(skuList.toList())
-            .setType(SUBS)
-            .build().let {
-                billingClient.querySkuDetails(it)
+            val subs = SkuDetailsParams.newBuilder()
+                .setSkusList(skuList.toList())
+                .setType(SUBS)
+                .build().let {
+                    billingClient.querySkuDetails(it)
+                }
+
+            if (!subs.billingResult.isOk()) {
+                return@withClientReady PlayBillingResource.Error(inApp.billingResult)
             }
 
-        if (!subs.billingResult.isOk()) {
-            return@withClientReady PlayBillingResource.Error(inApp.billingResult)
-        }
-
             return@withClientReady PlayBillingResource.Success(inApp.skuDetailsList.orEmpty() + subs.skuDetailsList.orEmpty())
-    }
+        }
 
     internal suspend fun purchaseSku(
         activity: Activity,
@@ -199,7 +198,7 @@ internal class PlayBillingClientWrapper(
             } else {
                 return@withClientReady PlayBillingResource.Error(res)
             }
-    }
+        }
 
     //    Consumes a given in-app product.
     internal suspend fun consumeToken(purchaseToken: String): PlayBillingResource<String?> =
@@ -238,7 +237,7 @@ internal class PlayBillingClientWrapper(
         withContext(Dispatchers.Main) {
             Logger.logDebug("purchaseSku - 1 - ${Thread.currentThread().name}")
             billingClient.launchBillingFlow(activity, params)
-        }.takeIf  { !it.isOk() }
+        }.takeIf { !it.isOk() }
             ?.let {
                 Logger.logDebug("purchaseSku - 2 fail - ${Thread.currentThread().name}")
                 purchasingSku.remove(sku.sku)
@@ -286,7 +285,9 @@ internal class PlayBillingClientWrapper(
             var connectionResult: BillingResult
             do {
                 delay(BACKOFF_RECONNECTION_MS * retryCount)
-                connectionResult = startConnection()
+                connectionResult = billingConnectionMutex.withLock {
+                    startConnectionSync(billingClient)
+                }
                 retryCount += 1
             } while (!connectionResult.isOk() && retryCount < MAX_RECONNECTION_RETRIES)
 
@@ -295,30 +296,27 @@ internal class PlayBillingClientWrapper(
             )
         }
 
-    private suspend fun startConnection(): BillingResult {
-        billingConnectionMutex.withLock {
-            return suspendCancellableCoroutine { c ->
-                billingClient.startConnection(object : BillingClientStateListener {
-                    override fun onBillingSetupFinished(billingResult: BillingResult) {
-                        Logger.logDebug("onBillingSetupFinished code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
-
-                        if (!billingResult.isOk()) {
-                            billingClient.endConnection()
-                        }
-
-                        if (c.isActive && c.context.isActive) {
-                            c.resume(billingResult)
-                        }
+    private suspend fun startConnectionSync(bc: BillingClient): BillingResult =
+        suspendCancellableCoroutine { c ->
+            bc.startConnection(object : BillingClientStateListener {
+                override fun onBillingSetupFinished(billingResult: BillingResult) {
+                    Logger.logDebug("onBillingSetupFinished code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
+                    if (c.isActive && c.context.isActive) {
+                        c.resume(billingResult)
                     }
+                }
 
-                    override fun onBillingServiceDisconnected() {
-                        Logger.logDebug("onBillingServiceDisconnected - ${Thread.currentThread().name}")
-                        billingClient.endConnection()
+                override fun onBillingServiceDisconnected() {
+                    Logger.logDebug("onBillingServiceDisconnected - ${Thread.currentThread().name}")
+                    if (c.isActive && c.context.isActive) {
+                        val disconnectedResult = BillingResult.newBuilder()
+                            .setResponseCode(BillingClient.BillingResponseCode.SERVICE_DISCONNECTED)
+                            .build()
+                        c.resume(disconnectedResult)
                     }
-                })
-            }
+                }
+            })
         }
-    }
 
     private fun BillingResult.isOk(): Boolean {
         return this.responseCode == BillingClient.BillingResponseCode.OK
