@@ -15,8 +15,6 @@ internal data class SkuDto(
     val store: Store?,
     @field:Json(name = "extravars")
     val extravars: Map<String, String>?,
-
-
     @field:Json(name = "name")
     val name: String?,
     @field:Json(name = "recurringprice")
@@ -24,15 +22,6 @@ internal data class SkuDto(
     @field:Json(name = "initialprice")
     val recurringprice: PaddlePriceDto?,
 ) {
-    @Throws(DTOException::class)
-    internal fun toSkuBase(): SkuBase {
-        return if (identifier == null || productId == null || store == null) {
-            throw DTOException("Unexpected SkuBase data format: missing identifier/productId")
-        } else {
-            SkuBase(identifier, productId, store)
-        }
-    }
-
     @Throws(DTOException::class)
     internal fun toSku(): ISkuBase {
         if (identifier == null || productId == null || store == null) {
@@ -56,7 +45,7 @@ internal data class SkuDto(
                 )
             }
             Store.PlayStore -> {
-                if (identifier.isNullOrEmpty() || productId.isNullOrEmpty()) {
+                if (identifier.isEmpty() || productId.isEmpty()) {
                     throw DTOException("Missing sku identifier/productId")
                 }
 
