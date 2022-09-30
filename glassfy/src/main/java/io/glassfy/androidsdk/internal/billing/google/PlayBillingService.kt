@@ -77,10 +77,18 @@ internal class PlayBillingService(ctx: Context, watcherMode: Boolean = false) : 
 
     override suspend fun skuDetails(skuList: Set<String>): Resource<List<SkuDetails>> =
         billingClientWrapper.querySkuDetails(skuList)
-            .let {
-                return when (it) {
-                    is PlayBillingResource.Success -> Resource.Success(convertSkusDetails(it.data!!))
-                    else -> Resource.Error(convertError(it.err!!))
+            .let { billingRes ->
+                return when (billingRes) {
+                    is PlayBillingResource.Success -> {
+                        val skuDetails = convertSkusDetails(billingRes.data!!)
+                        val invalidProductIdentifiers = skuList.minus(skuDetails.map { it.sku }.toSet()).joinToString("\n\t")
+                        if (!invalidProductIdentifiers.isEmpty()) {
+                            Logger.logDebug("PlayStore does not return details for the following products:\n\t${invalidProductIdentifiers}\nCheck the guide at 🔗 https://docs.glassfy.io/26293898")
+                        }
+
+                        return Resource.Success(skuDetails)
+                    }
+                    else -> Resource.Error(convertError(billingRes.err!!))
                 }
             }
 
