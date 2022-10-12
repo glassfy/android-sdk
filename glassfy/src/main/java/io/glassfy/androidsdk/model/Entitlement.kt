@@ -21,7 +21,7 @@ enum class Entitlement(val value: Int) {
         internal fun fromValue(value: Int): Entitlement {
             return when (value) {
                 -9 -> NeverBuy
-                -8 -> OtherRefund
+                -8  -> OtherRefund
                 -7 -> IssueRefund
                 -6 -> Upgraded
                 -5 -> ExpiredVoluntarily

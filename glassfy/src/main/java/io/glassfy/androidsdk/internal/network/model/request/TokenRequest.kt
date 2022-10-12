@@ -18,8 +18,11 @@ internal data class TokenRequest(
     @field:Json(name = "token")
     val token: String?,
     @field:Json(name = "quantity")
-    val quantity: Int?
+    val quantity: Int?,
 ) {
+    @field:Json(name = "offeringidentifier")
+    var offeringId: String? = null
+
     companion object {
         internal fun from(p: HistoryPurchase, isSubscription: Boolean) =
             TokenRequest(isSubscription, p.skus, null, p.purchaseTime, p.purchaseToken, p.quantity)

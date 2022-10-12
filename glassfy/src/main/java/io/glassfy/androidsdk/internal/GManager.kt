@@ -294,6 +294,7 @@ internal class GManager : LifecycleEventObserver {
 
         return result.data.let { p ->
             val tokenReq = TokenRequest.from(p, sku.product.type == BillingClient.SkuType.SUBS)
+            tokenReq.offeringId = sku.offeringId
             repository.token(tokenReq).apply {
                 data?.permissions?.installationId_ = cacheManager.installationId
             }

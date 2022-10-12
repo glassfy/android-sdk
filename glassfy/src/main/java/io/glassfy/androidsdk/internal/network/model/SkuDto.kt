@@ -23,7 +23,7 @@ internal data class SkuDto(
     val recurringprice: PaddlePriceDto?,
 ) {
     @Throws(DTOException::class)
-    internal fun toSku(): ISkuBase {
+    internal fun toSku(offeringId: String? = null): ISkuBase {
         if (identifier == null || productId == null || store == null) {
             throw DTOException("Unexpected Sku data format: missing identifier/productId")
         }
@@ -52,7 +52,8 @@ internal data class SkuDto(
                 Sku(
                     identifier,
                     productId,
-                    extravars ?: emptyMap()
+                    extravars ?: emptyMap(),
+                    offeringId
                 )
             }
             else -> SkuBase(identifier, productId, store)
