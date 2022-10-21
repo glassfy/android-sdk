@@ -17,9 +17,7 @@ internal class StoreInfoAdapter {
     }
 
     @FromJson
-    fun fromJson(jsonReader: JsonReader, storeInfoAdapter: JsonAdapter<StoreInfoDto>): StoreInfo {
-        val store = storeInfoAdapter.fromJson(jsonReader)?.store ?: Store.Unknown
-
+    fun fromJson(jsonReader: JsonReader): StoreInfo {
         var rawValue: Map<String, Any> = emptyMap()
         val readJsonValue = jsonReader.readJsonValue()
         if (readJsonValue is Map<*, *>) {
@@ -27,7 +25,12 @@ internal class StoreInfoAdapter {
             rawValue = readJsonValue as Map<String, Any>
         }
 
-        return when (store) {
+        val storeValue = when (val rawValueStore = rawValue["store"]) {
+            is String -> rawValueStore.toIntOrNull() ?: -1
+            is Int -> rawValueStore
+            else -> -1
+        }
+        return when (val store = Store.fromValue(storeValue)) {
             Store.Paddle -> StoreInfoPaddle(rawValue)
             else -> StoreInfoUnknown(store, rawValue)
         }
