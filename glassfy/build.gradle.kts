@@ -4,6 +4,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     kotlin("kapt")
+    id("kotlin-parcelize")
     id("maven-publish")
     id("signing")
     id("org.jetbrains.dokka")
@@ -75,6 +76,9 @@ dependencies {
 //    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
     kapt("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
+
+    // Fragment
+    implementation("androidx.fragment:fragment:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")

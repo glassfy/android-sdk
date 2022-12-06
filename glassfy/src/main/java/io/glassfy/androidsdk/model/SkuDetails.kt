@@ -1,5 +1,9 @@
 package io.glassfy.androidsdk.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class SkuDetails(
     val description: String,
     val freeTrialPeriod: String,
@@ -19,4 +23,8 @@ data class SkuDetails(
     val type: String,
     val hashCode: Int,
     val originalJson: String
-)
+): Parcelable {
+    companion object {
+         val empty = SkuDetails("","","","",0,0,"","",0,"",0,"","","","","",0,"")
+    }
+}

@@ -2,6 +2,7 @@ package io.glassfy.androidsdk
 
 import androidx.annotation.UiThread
 import io.glassfy.androidsdk.model.*
+import io.glassfy.androidsdk.model.ui.PaywallFragment
 
 fun interface ErrorCallback {
     @UiThread
@@ -28,3 +29,7 @@ fun interface InitializeCallback : Callback<Boolean>
 fun interface StoreCallback : Callback<StoresInfo>
 
 fun interface UserPropertiesCallback : Callback<UserProperties>
+
+fun interface PaywallCallback : Callback<Paywall>
+
+fun interface PaywallUICallback : Callback<PaywallFragment>

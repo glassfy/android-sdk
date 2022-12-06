@@ -82,7 +82,7 @@ internal class PlayBillingService(ctx: Context, watcherMode: Boolean = false) : 
                     is PlayBillingResource.Success -> {
                         val skuDetails = convertSkusDetails(billingRes.data!!)
                         val invalidProductIdentifiers = skuList.minus(skuDetails.map { it.sku }.toSet()).joinToString("\n\t")
-                        if (!invalidProductIdentifiers.isEmpty()) {
+                        if (invalidProductIdentifiers.isNotEmpty()) {
                             Logger.logDebug("PlayStore does not return details for the following products:\n\t${invalidProductIdentifiers}\nCheck the guide at 🔗 https://docs.glassfy.io/26293898")
                         }
 

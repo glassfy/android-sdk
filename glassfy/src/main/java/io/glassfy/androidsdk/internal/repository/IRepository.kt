@@ -1,5 +1,6 @@
 package io.glassfy.androidsdk.internal.repository
 
+import io.glassfy.androidsdk.internal.model.PaywallImpl
 import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
 import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
 import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
@@ -27,4 +28,5 @@ internal interface IRepository {
     suspend fun storeInfo(): Resource<StoresInfo>
     suspend fun setUserProperty(req: UserPropertiesRequest): Resource<Unit>
     suspend fun getUserProperty(): Resource<UserProperties>
+    suspend fun paywall(id: String): Resource<PaywallImpl>
 }

@@ -1,7 +1,7 @@
 package io.glassfy.androidsdk.internal.cache
 
 import android.content.Context
-import java.util.*
+import java.util.UUID
 
 internal class CacheManager(ctx: Context) : ICacheManager {
 

@@ -2,6 +2,8 @@ package io.glassfy.androidsdk
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import io.glassfy.androidsdk.BuildConfig.SDK_VERSION
 import io.glassfy.androidsdk.internal.GManager
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
@@ -34,6 +36,24 @@ object Glassfy {
         } else {
             customScope.runNoResult { manager.initialize(ctx, apiKey, watcherMode) }
         }
+    }
+
+    /**
+     * Download a Paywall
+     *
+     * @param identifier Remote configuration identifier
+     * @param preload Whether to preload the paywall in background. Default is `true`
+     * @param callback Completion callback with results
+     */
+    @JvmStatic
+    @JvmOverloads
+    @RequiresApi(Build.VERSION_CODES.N)
+    fun paywall(
+        identifier: String,
+        preload: Boolean = true,
+        callback: PaywallCallback
+    ) {
+        customScope.runAndPostResult(callback) { manager.paywall(identifier, preload) }
     }
 
     /**
@@ -216,7 +236,7 @@ object Glassfy {
         )
     }
 
-    private fun CoroutineScope.runAndPostErrResult(
+    internal fun CoroutineScope.runAndPostErrResult(
         callback: ErrorCallback,
         block: suspend CoroutineScope.() -> Resource<Unit>
     ) {
@@ -235,11 +255,11 @@ object Glassfy {
         }
     }
 
-    private fun CoroutineScope.runNoResult(block: suspend CoroutineScope.() -> Unit) {
+    internal fun CoroutineScope.runNoResult(block: suspend CoroutineScope.() -> Unit) {
         launch(block = block)
     }
 
-    private fun <T> CoroutineScope.runAndPostResult(
+    internal fun <T> CoroutineScope.runAndPostResult(
         callback: Callback<T>,
         block: suspend CoroutineScope.() -> Resource<T>
     ) {

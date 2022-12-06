@@ -54,4 +54,8 @@ internal interface IApiService {
 
     @GET("/v0/property")
     suspend fun getUserProperty(): Response<UserPropertiesResponse>
+
+    @GET("/v1/paywall")
+    suspend fun getPaywall(@Query("identifier") paywallId: String,
+                           @Query("locale") locale: String): Response<PaywallResponse>
 }

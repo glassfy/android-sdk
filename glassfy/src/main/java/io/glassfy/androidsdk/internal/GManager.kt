@@ -21,10 +21,7 @@ import io.glassfy.androidsdk.internal.device.DeviceManager
 import io.glassfy.androidsdk.internal.device.IDeviceManager
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.internal.network.IApiService
-import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
-import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
-import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
-import io.glassfy.androidsdk.internal.network.model.request.UserPropertiesRequest
+import io.glassfy.androidsdk.internal.network.model.request.*
 import io.glassfy.androidsdk.internal.network.model.utils.*
 import io.glassfy.androidsdk.internal.repository.IRepository
 import io.glassfy.androidsdk.internal.repository.Repository
@@ -73,6 +70,7 @@ internal class GManager : LifecycleEventObserver {
     @Volatile
     private lateinit var cacheManager: ICacheManager
 
+    private var appContext: Context? = null
 
     internal suspend fun initialize(
         ctx: Context,
@@ -91,14 +89,15 @@ internal class GManager : LifecycleEventObserver {
         }
 
         // init
-        val appContext = ctx.applicationContext
-        packageName = appContext.packageName
-        cacheManager = CacheManager(appContext.applicationContext)
-        val deviceManager: IDeviceManager = DeviceManager(appContext.applicationContext)
+        val appCtx = ctx.applicationContext
+        packageName = appCtx.packageName
+        cacheManager = CacheManager(appCtx)
+        val deviceManager: IDeviceManager = DeviceManager(appCtx)
         val apiService: IApiService = makeApiService(cacheManager, deviceManager, apiKey)
         repository = Repository(apiService)
-        billingService = PlayBillingService(appContext, watcherMode)
+        billingService = PlayBillingService(appCtx, watcherMode)
         billingService.setDelegate(_delegate)
+        appContext = appCtx
 
         val res = _initialize()
         if (res.err != null) {
@@ -184,6 +183,11 @@ internal class GManager : LifecycleEventObserver {
 
     internal suspend fun getUserProperties(): Resource<UserProperties> =
         withSdkInitializedOrError { repository.getUserProperty() }
+
+
+    internal suspend fun paywall(identifier: String, preload: Boolean): Resource<Paywall> =
+        withSdkInitializedOrError { _paywallFragment(identifier, preload) }
+
 
     /// Impl
 
@@ -371,6 +375,32 @@ internal class GManager : LifecycleEventObserver {
         return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
+    private suspend fun _paywallFragment(identifier: String, preload: Boolean): Resource<Paywall> {
+        val pRes = repository.paywall(identifier)
+        if (pRes.err != null) return Resource.Error(pRes.err)
+        if (pRes.data == null || pRes.data.skus.isEmpty()) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
+
+        val dRes = pRes.data.skus
+            .map {  s -> s.productId }
+            .toSet()
+            .let { billingService.skuDetails(it) }
+        if (dRes.err != null) return Resource.Error(dRes.err)
+        if (dRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
+
+        pRes.data.skus_ = pRes.data.skus
+            .filter { sku -> dRes.data.map { it.sku }.contains(sku.productId) }
+        pRes.data.skus_.forEach { s ->
+            dRes.data.find { detail -> detail.sku == s.productId }
+                ?.let { detail -> s.product = detail }
+        }
+
+        val ctx = appContext
+        if (preload &&  ctx != null) {
+            pRes.data.startLoading(ctx)
+        }
+
+        return Resource.Success(pRes.data)
+    }
 
     /// LifecycleEventObserver
 
@@ -418,6 +448,7 @@ internal class GManager : LifecycleEventObserver {
             .add(StoreAdapter())
             .add(StoreInfoAdapter())
             .add(UserPropertiesAdapter())
+            .add(PaywallTypeAdapter())
             // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
             .build()
 

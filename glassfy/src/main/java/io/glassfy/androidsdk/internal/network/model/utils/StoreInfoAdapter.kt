@@ -1,10 +1,8 @@
 package io.glassfy.androidsdk.internal.network.model.utils
 
 import com.squareup.moshi.FromJson
-import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.ToJson
-import io.glassfy.androidsdk.internal.network.model.StoreInfoDto
 import io.glassfy.androidsdk.model.Store
 import io.glassfy.androidsdk.model.StoreInfo
 import io.glassfy.androidsdk.model.StoreInfoPaddle
