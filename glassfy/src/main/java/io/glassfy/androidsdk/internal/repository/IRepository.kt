@@ -27,4 +27,5 @@ internal interface IRepository {
     suspend fun storeInfo(): Resource<StoresInfo>
     suspend fun setUserProperty(req: UserPropertiesRequest): Resource<Unit>
     suspend fun getUserProperty(): Resource<UserProperties>
+    suspend fun setAttributions(req: Map<String, String?>): Resource<Unit>
 }

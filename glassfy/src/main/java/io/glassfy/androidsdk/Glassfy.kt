@@ -5,9 +5,7 @@ import android.content.Context
 import io.glassfy.androidsdk.BuildConfig.SDK_VERSION
 import io.glassfy.androidsdk.internal.GManager
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
-import io.glassfy.androidsdk.model.Sku
-import io.glassfy.androidsdk.model.Store
-import io.glassfy.androidsdk.model.SubscriptionUpdate
+import io.glassfy.androidsdk.model.*
 import kotlinx.coroutines.*
 
 object Glassfy {
@@ -78,6 +76,13 @@ object Glassfy {
         customScope.runAndPostResult(callback) { manager.sku(identifier) }
     }
 
+    /**
+     * Fetch Base Sku info from other stores
+     *
+     * @param identifier Sku's identifier
+     * @param store Store
+     * @param callback Completion callback with results
+     */
     @JvmStatic
     fun sku(identifier: String, store: Store, callback: SkuBaseCallback) {
         customScope.runAndPostResult(callback) { manager.skubase(identifier, store) }
@@ -205,6 +210,40 @@ object Glassfy {
         }
     }
 
+    /**
+     * Set attribution values
+     *
+     * @param type Sku's identifier
+     * @param value Store
+     * @param callback Completion callback
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun setAttribution(type: AttributionItem.Type, value: String?, callback: ErrorCallback?=null) {
+        if (callback != null) {
+            customScope.runAndPostErrResult(callback) { manager.setAttribution(type, value) }
+        } else {
+            customScope.runNoResult { manager.setAttribution(type, value) }
+        }
+    }
+
+    /**
+     * Set attribution values
+     *
+     * @param attributions List of attributions
+     * @param callback Completion callback
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun setAttributions(attributions: List<AttributionItem>, callback: ErrorCallback?=null) {
+        if (callback != null) {
+            customScope.runAndPostErrResult(callback) { manager.setAttributions(attributions) }
+        } else {
+            customScope.runNoResult { manager.setAttributions(attributions) }
+        }
+    }
+
+    
 //  UTILS
 
     internal val manager: GManager by lazy { GManager() }

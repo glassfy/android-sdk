@@ -21,6 +21,7 @@ import io.glassfy.androidsdk.internal.device.DeviceManager
 import io.glassfy.androidsdk.internal.device.IDeviceManager
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.internal.network.IApiService
+import io.glassfy.androidsdk.internal.network.model.AttributionItemTypeDto
 import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
 import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
 import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
@@ -172,7 +173,6 @@ internal class GManager : LifecycleEventObserver {
     internal suspend fun storeInfo(): Resource<StoresInfo> =
         withSdkInitializedOrError { repository.storeInfo() }
 
-
     internal suspend fun setDeviceToken(token: String?): Resource<Unit> =
         withSdkInitializedOrError { repository.setUserProperty(UserPropertiesRequest.Token(token)) }
 
@@ -184,6 +184,18 @@ internal class GManager : LifecycleEventObserver {
 
     internal suspend fun getUserProperties(): Resource<UserProperties> =
         withSdkInitializedOrError { repository.getUserProperty() }
+
+    internal suspend fun setAttribution(type: AttributionItem.Type, value: String?): Resource<Unit> =
+        setAttributions(listOf(AttributionItem(type, value)))
+
+    internal suspend fun setAttributions(attributions: List<AttributionItem>): Resource<Unit> =
+        withSdkInitializedOrError {
+            attributions.associate {
+                AttributionItemTypeDto.field(it.type) to it.value
+            }.let {
+                repository.setAttributions(it)
+            }
+        }
 
     /// Impl
 

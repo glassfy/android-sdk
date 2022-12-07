@@ -22,7 +22,7 @@ Add the dependency to your module-level `build.gradle`:
 ```
 dependencies {
     [...]
-    implementation 'io.glassfy:androidsdk:1.3.6'
+    implementation 'io.glassfy:androidsdk:1.3.7'
 }
 ```
 

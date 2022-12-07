@@ -1,5 +1,6 @@
 package io.glassfy.androidsdk.internal.network
 
+import io.glassfy.androidsdk.internal.network.model.request.*
 import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
 import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
 import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
@@ -54,4 +55,7 @@ internal interface IApiService {
 
     @GET("/v0/property")
     suspend fun getUserProperty(): Response<UserPropertiesResponse>
+
+    @POST("/v0/attribution")
+    suspend fun postAttributions(@Body body: Map<String,String?>): Response<ErrorResponse>
 }

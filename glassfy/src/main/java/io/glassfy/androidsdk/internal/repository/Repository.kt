@@ -388,6 +388,34 @@ internal class Repository(
     }
 
 
+    override suspend fun setAttributions(req: Map<String, String?>): Resource<Unit> {
+        return try {
+            val response = api.postAttributions(req)
+            val result = response.body()
+            if (response.isSuccessful && result != null && result.error == null) {
+                Resource.Success(Unit)
+            } else {
+                val err =
+                    result?.error?.description?.let { GlassfyErrorCode.ServerError.toError(it) }
+                        ?: GlassfyErrorCode.UnknowError.toError(response.message())
+                Resource.Error(err)
+            }
+        } catch (e: HttpException) {
+            Resource.Error(GlassfyErrorCode.HttpException.toError(e.message ?: e.toString()))
+        } catch (e: UnknownHostException) {
+            Resource.Error(GlassfyErrorCode.InternetConnection.toError(e.message ?: e.toString()))
+        } catch (e: IOException) {
+            Resource.Error(GlassfyErrorCode.IOException.toError(e.message ?: e.toString()))
+        } catch (e: JsonDataException) {
+            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
+        } catch (e: DTOException) {
+            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
+        } catch (e: Exception) {
+            Resource.Error(GlassfyErrorCode.UnknowError.toError(e.message ?: e.toString()))
+        }
+    }
+
+
     override suspend fun getUserProperty(): Resource<UserProperties> {
         return try {
             val response = api.getUserProperty()
