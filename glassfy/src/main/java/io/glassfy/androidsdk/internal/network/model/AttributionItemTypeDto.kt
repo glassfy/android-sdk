@@ -8,6 +8,8 @@ internal class AttributionItemTypeDto {
             AttributionItem.Type.AdjustID -> "adjustid"
             AttributionItem.Type.AppsFlyerID -> "appsflyerid"
             AttributionItem.Type.GAID -> "gaid"
+            AttributionItem.Type.ASID -> "asid"
+            AttributionItem.Type.AID -> "aid"
             AttributionItem.Type.IP -> "ip"
         }
     }

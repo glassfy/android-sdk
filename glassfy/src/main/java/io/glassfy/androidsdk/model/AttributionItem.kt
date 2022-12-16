@@ -21,6 +21,16 @@ data class AttributionItem(
         GAID,
 
         /**
+         * privacy friendly App Set Id (see below link) Android 12+ only
+         */
+        ASID,
+
+        /**
+         * Android ID - Android 8+ (superseed by ASID in Android 12+)
+         */
+        AID,
+
+        /**
          * User IP address
          */
         IP,
