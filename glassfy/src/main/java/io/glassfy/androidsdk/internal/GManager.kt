@@ -60,6 +60,9 @@ internal class GManager : LifecycleEventObserver {
     private var packageName: String? = null
 
     @Volatile
+    private var installTime: Long? = null
+
+    @Volatile
     private var watcherMode = false
 
     @Volatile
@@ -94,6 +97,9 @@ internal class GManager : LifecycleEventObserver {
         // init
         val appContext = ctx.applicationContext
         packageName = appContext.packageName
+        installTime = packageName?.runCatching {
+            appContext.packageManager.getPackageInfo(this, 0).firstInstallTime
+        }?.getOrNull()
         cacheManager = CacheManager(appContext.applicationContext)
         val deviceManager: IDeviceManager = DeviceManager(appContext.applicationContext)
         val apiService: IApiService = makeApiService(cacheManager, deviceManager, apiKey)
@@ -217,7 +223,8 @@ internal class GManager : LifecycleEventObserver {
         val initReq = InitializeRequest.from(
             packageName ?: "",
             subsHRes.data.orEmpty(),
-            inappHRes.data.orEmpty()
+            inappHRes.data.orEmpty(),
+            installTime,
         )
         val serverInfo = repository.initialize(initReq)
         if (serverInfo.err != null) {
