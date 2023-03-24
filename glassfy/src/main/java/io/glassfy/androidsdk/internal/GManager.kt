@@ -1,7 +1,6 @@
 package io.glassfy.androidsdk.internal
 
 import android.app.Activity
-import android.content.Context
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
@@ -77,12 +76,7 @@ internal class GManager : LifecycleEventObserver {
     @Volatile
     private lateinit var cacheManager: ICacheManager
 
-
-    internal suspend fun initialize(
-        ctx: Context,
-        apiKey: String,
-        watcherMode: Boolean
-    ): Resource<Boolean> {
+    internal suspend fun initialize(opt: Glassfy.InitializeOptions): Resource<Boolean> {
         val currState =
             state.getAndUpdate { if (it == SdkState.NotInitialized) SdkState.Initializing else it }
         if (currState == SdkState.Initializing) {
@@ -94,7 +88,15 @@ internal class GManager : LifecycleEventObserver {
             return Resource.Success(false)
         }
 
+        // destructuring opt
+        val ctx = opt.context
+        val apiKey = opt.apiKey
+        val watcherMode = opt.watcherMode
+        val crossPlatformSdkFramework = opt.crossPlatformSdkFramework
+        val crossPlatformSdkVersion = opt.crossPlatformSdkVersion
+
         // init
+        this.watcherMode = watcherMode
         val appContext = ctx.applicationContext
         packageName = appContext.packageName
         installTime = packageName?.runCatching {
@@ -107,7 +109,7 @@ internal class GManager : LifecycleEventObserver {
         billingService = PlayBillingService(appContext, watcherMode)
         billingService.setDelegate(_delegate)
 
-        val res = _initialize()
+        val res = _initialize(crossPlatformSdkFramework, crossPlatformSdkVersion)
         if (res.err != null) {
             return res
         }
@@ -191,7 +193,10 @@ internal class GManager : LifecycleEventObserver {
     internal suspend fun getUserProperties(): Resource<UserProperties> =
         withSdkInitializedOrError { repository.getUserProperty() }
 
-    internal suspend fun setAttribution(type: AttributionItem.Type, value: String?): Resource<Unit> =
+    internal suspend fun setAttribution(
+        type: AttributionItem.Type,
+        value: String?
+    ): Resource<Unit> =
         setAttributions(listOf(AttributionItem(type, value)))
 
     internal suspend fun setAttributions(attributions: List<AttributionItem>): Resource<Unit> =
@@ -203,9 +208,15 @@ internal class GManager : LifecycleEventObserver {
             }
         }
 
+    internal suspend fun purchaseHistory(): Resource<PurchasesHistory> =
+        withSdkInitializedOrError { repository.getPurchaseHistory() }
+
     /// Impl
 
-    private suspend fun _initialize(): Resource<Boolean> {
+    private suspend fun _initialize(
+        crossPlatformSdkFramework: String? = null,
+        crossPlatformSdkVersion: String? = null
+    ): Resource<Boolean> {
         state.emit(SdkState.Initializing)
 
         val inappHRes = billingService.inAppPurchaseHistory()
@@ -225,6 +236,8 @@ internal class GManager : LifecycleEventObserver {
             subsHRes.data.orEmpty(),
             inappHRes.data.orEmpty(),
             installTime,
+            crossPlatformSdkFramework,
+            crossPlatformSdkVersion
         )
         val serverInfo = repository.initialize(initReq)
         if (serverInfo.err != null) {
@@ -436,6 +449,7 @@ internal class GManager : LifecycleEventObserver {
             .add(EntitlementAdapter())
             .add(StoreAdapter())
             .add(StoreInfoAdapter())
+            .add(EventTypeAdapter())
             .add(UserPropertiesAdapter())
             // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
             .build()

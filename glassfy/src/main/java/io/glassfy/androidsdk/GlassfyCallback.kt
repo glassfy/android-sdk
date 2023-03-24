@@ -28,3 +28,5 @@ fun interface InitializeCallback : Callback<Boolean>
 fun interface StoreCallback : Callback<StoresInfo>
 
 fun interface UserPropertiesCallback : Callback<UserProperties>
+
+fun interface PurchaseHistoryCallback : Callback<PurchasesHistory>

@@ -1,10 +1,6 @@
 package io.glassfy.androidsdk.internal.network
 
 import io.glassfy.androidsdk.internal.network.model.request.*
-import io.glassfy.androidsdk.internal.network.model.request.ConnectRequest
-import io.glassfy.androidsdk.internal.network.model.request.InitializeRequest
-import io.glassfy.androidsdk.internal.network.model.request.TokenRequest
-import io.glassfy.androidsdk.internal.network.model.request.UserPropertiesRequest
 import io.glassfy.androidsdk.internal.network.model.response.*
 import retrofit2.Response
 import retrofit2.http.*
@@ -57,5 +53,8 @@ internal interface IApiService {
     suspend fun getUserProperty(): Response<UserPropertiesResponse>
 
     @POST("/v0/attribution")
-    suspend fun postAttributions(@Body body: Map<String,String?>): Response<ErrorResponse>
+    suspend fun postAttributions(@Body body: Map<String, String?>): Response<ErrorResponse>
+
+    @GET("/v0/purchases")
+    suspend fun getPurchaseHistory(): Response<PurchaseHistoryResponse>
 }

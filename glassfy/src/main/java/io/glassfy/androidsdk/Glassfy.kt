@@ -5,7 +5,10 @@ import android.content.Context
 import io.glassfy.androidsdk.BuildConfig.SDK_VERSION
 import io.glassfy.androidsdk.internal.GManager
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
-import io.glassfy.androidsdk.model.*
+import io.glassfy.androidsdk.model.AttributionItem
+import io.glassfy.androidsdk.model.Sku
+import io.glassfy.androidsdk.model.Store
+import io.glassfy.androidsdk.model.SubscriptionUpdate
 import kotlinx.coroutines.*
 
 object Glassfy {
@@ -14,9 +17,9 @@ object Glassfy {
     /**
      * Initialize the SDK
      *
-     * @param ctx the [android.content.Context]
+     * @param ctx Android's context [android.content.Context]
      * @param apiKey API Key
-     * @param watcherMode Take advantage of our charts and stats without change your existing code
+     * @param watcherMode Take advantage of our charts and stats without changing your existing code
      * @param callback Completion callback with results
      */
     @JvmStatic
@@ -27,10 +30,71 @@ object Glassfy {
         watcherMode: Boolean = false,
         callback: InitializeCallback?
     ) {
+        val opt = InitializeOptions(ctx, apiKey).watcherMode(watcherMode)
+        initialize(opt, callback)
+    }
+
+    /**
+     * SDK initialization options
+     *
+     * @param context Android's context [android.content.Context]
+     * @param apiKey API Key
+     */
+    class InitializeOptions(val context: Context, val apiKey: String) {
+        /**
+         * WatcherMode status. By default it's disabled
+         * */
+        var watcherMode: Boolean = false
+            private set
+
+        /**
+         * Cross-platform SDK framework
+         * */
+        var crossPlatformSdkFramework: String? = null
+            private set
+
+        /**
+         * Cross-platform SDK version
+         * */
+        var crossPlatformSdkVersion: String? = null
+            private set
+
+        /**
+         * Set WatcherMode
+         * @param enable Enable/Disable WatcherMode
+         * */
+        fun watcherMode(enable: Boolean) = apply { this.watcherMode = enable }
+
+        /**
+         * Cross-platform SDK
+         * @param framework Cross-platform SDK framework
+         * */
+        fun crossPlatformSdkFramework(framework: String?) =
+            apply { this.crossPlatformSdkFramework = framework }
+
+        /**
+         * Cross-platform SDK
+         * @param version Cross-platform SDK version
+         * */
+        fun crossPlatformSdkVersion(version: String?) =
+            apply { this.crossPlatformSdkVersion = version }
+    }
+
+    /**
+     * Initialize the SDK
+     *
+     * @param options Initialization options [io.glassfy.androidsdk.Glassfy.InitializeOptions]
+     * @param callback Completion callback with results
+     */
+    @JvmStatic
+    fun initialize(
+        options: InitializeOptions,
+        callback: InitializeCallback?
+    ) {
         if (callback != null) {
-            customScope.runAndPostResult(callback) { manager.initialize(ctx, apiKey, watcherMode) }
+            customScope.runAndPostResult(callback) { manager.initialize(options) }
         } else {
-            customScope.runNoResult { manager.initialize(ctx, apiKey, watcherMode) }
+            customScope.runNoResult { manager.initialize(options) }
         }
     }
 
@@ -219,7 +283,11 @@ object Glassfy {
      */
     @JvmStatic
     @JvmOverloads
-    fun setAttribution(type: AttributionItem.Type, value: String?, callback: ErrorCallback?=null) {
+    fun setAttribution(
+        type: AttributionItem.Type,
+        value: String?,
+        callback: ErrorCallback? = null
+    ) {
         if (callback != null) {
             customScope.runAndPostErrResult(callback) { manager.setAttribution(type, value) }
         } else {
@@ -235,7 +303,7 @@ object Glassfy {
      */
     @JvmStatic
     @JvmOverloads
-    fun setAttributions(attributions: List<AttributionItem>, callback: ErrorCallback?=null) {
+    fun setAttributions(attributions: List<AttributionItem>, callback: ErrorCallback? = null) {
         if (callback != null) {
             customScope.runAndPostErrResult(callback) { manager.setAttributions(attributions) }
         } else {
@@ -243,7 +311,18 @@ object Glassfy {
         }
     }
 
-    
+    /**
+     * Purchase history
+     *
+     * @param callback Completion block
+     */
+    @JvmStatic
+    fun purchaseHistory(callback: PurchaseHistoryCallback) {
+        customScope.runAndPostResult(callback) {
+            manager.purchaseHistory()
+        }
+    }
+
 //  UTILS
 
     internal val manager: GManager by lazy { GManager() }
