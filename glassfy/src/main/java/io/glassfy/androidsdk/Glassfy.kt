@@ -222,7 +222,7 @@ object Glassfy {
      * @param force Disconnect license from other subscriber(s) and connect with current subscriber
      * @param callback Completion callback
      *
-     * @note  Check error code in GYDomain - GYErrorCodeLicenseAlreadyConnected, GYErrorCodeLicenseInvalid to handle those cases
+     * @note  Check [GlassfyErrorCode] LicenseAlreadyConnected, LicenseNotFound to handle those cases
      */
     @JvmStatic
     @JvmOverloads
@@ -234,6 +234,30 @@ object Glassfy {
         customScope.runAndPostErrResult(callback) {
             manager.connectPaddleLicenseKey(
                 licenseKey,
+                force
+            )
+        }
+    }
+
+    /**
+     * Connect Glassfy Universal Code
+     *
+     * @param universalCode Glassfy Universal Code
+     * @param force Disconnect the code from other subscriber(s) and connect with current subscriber
+     * @param callback Completion callback
+     *
+     * @note  Check [GlassfyErrorCode] UniversalCodeAlreadyConnected, UniversalCodeNotFound to handle those cases
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun connectGlassfyUniversalCode(
+        universalCode: String,
+        force: Boolean = false,
+        callback: ErrorCallback
+    ) {
+        customScope.runAndPostErrResult(callback) {
+            manager.connectGlassfyUniversalCode(
+                universalCode,
                 force
             )
         }

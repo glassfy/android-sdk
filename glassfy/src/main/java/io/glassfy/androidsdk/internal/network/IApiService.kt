@@ -43,6 +43,9 @@ internal interface IApiService {
     @POST("/v0/connect")
     suspend fun connectPaddleLicense(@Body body: ConnectRequest): Response<ErrorResponse>
 
+    @POST("/v0/connect")
+    suspend fun connectUniversalCode(@Body body: ConnectRequest): Response<ErrorResponse>
+
     @GET("/v0/storeinfo")
     suspend fun getStoreInfo(): Response<StoresInfoResponse>
 

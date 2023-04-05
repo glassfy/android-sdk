@@ -307,12 +307,40 @@ internal class Repository(
                 val err =
                     result?.error?.description?.let {
                         when (result.error.code) {
-                            GlassfyErrorCode.LicenseAlreadyConnected.internalCode -> GlassfyErrorCode.LicenseAlreadyConnected.toError(
-                                it
-                            )
-                            GlassfyErrorCode.LicenseNotFound.internalCode -> GlassfyErrorCode.LicenseNotFound.toError(
-                                it
-                            )
+                            GlassfyErrorCode.LicenseAlreadyConnected.internalCode -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
+                            GlassfyErrorCode.LicenseNotFound.internalCode -> GlassfyErrorCode.LicenseNotFound.toError(it)
+                            else -> GlassfyErrorCode.ServerError.toError(it)
+                        }
+                    } ?: GlassfyErrorCode.UnknowError.toError(response.message())
+                Resource.Error(err)
+            }
+        } catch (e: HttpException) {
+            Resource.Error(GlassfyErrorCode.HttpException.toError(e.message ?: e.toString()))
+        } catch (e: UnknownHostException) {
+            Resource.Error(GlassfyErrorCode.InternetConnection.toError(e.message ?: e.toString()))
+        } catch (e: IOException) {
+            Resource.Error(GlassfyErrorCode.IOException.toError(e.message ?: e.toString()))
+        } catch (e: JsonDataException) {
+            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
+        } catch (e: DTOException) {
+            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
+        } catch (e: Exception) {
+            Resource.Error(GlassfyErrorCode.UnknowError.toError(e.message ?: e.toString()))
+        }
+    }
+
+    override suspend fun connectGlassfyUniversalCode(connect: ConnectRequest): Resource<Unit> {
+        return try {
+            val response = api.connectUniversalCode(connect)
+            val result = response.body()
+            if (response.isSuccessful && result != null && result.error == null) {
+                Resource.Success(Unit)
+            } else {
+                val err =
+                    result?.error?.description?.let {
+                        when (result.error.code) {
+                            GlassfyErrorCode.UniversalCodeAlreadyConnected.internalCode -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
+                            GlassfyErrorCode.UniversalCodeNotFound.internalCode -> GlassfyErrorCode.LicenseNotFound.toError(it)
                             else -> GlassfyErrorCode.ServerError.toError(it)
                         }
                     } ?: GlassfyErrorCode.UnknowError.toError(response.message())

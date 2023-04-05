@@ -15,6 +15,8 @@ enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
     ServerError,
     LicenseAlreadyConnected(1050),
     LicenseNotFound(1051),
+    UniversalCodeAlreadyConnected(1050),
+    UniversalCodeNotFound(1051),
     InternetConnection,
     IOException,
     HttpException,
@@ -40,6 +42,8 @@ enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
             ServerError -> "Server error"
             LicenseAlreadyConnected -> "License already connected"
             LicenseNotFound -> "License not found"
+            UniversalCodeAlreadyConnected -> "Universal Code already connected"
+            UniversalCodeNotFound -> "Universal Code not found"
             InternetConnection -> "Check your internet connection"
             IOException -> "IOException"
             HttpException -> "HttpException"

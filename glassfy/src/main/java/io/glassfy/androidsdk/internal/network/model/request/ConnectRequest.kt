@@ -21,5 +21,8 @@ internal data class ConnectRequest(
 
         internal fun paddleLicense(licenseKey: String, force: Boolean) =
             ConnectRequest(store = Store.Paddle.value, licenseKey = licenseKey, force = force)
+
+        internal fun universalCode(universalCode: String, force: Boolean) =
+            ConnectRequest(store = Store.Glassfy.value, licenseKey = universalCode, force = force)
     }
 }

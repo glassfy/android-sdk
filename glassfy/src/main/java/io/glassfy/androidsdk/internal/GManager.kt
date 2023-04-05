@@ -178,6 +178,12 @@ internal class GManager : LifecycleEventObserver {
     ): Resource<Unit> =
         withSdkInitializedOrError { _connectPaddleLicense(licenseKey, force) }
 
+    internal suspend fun connectGlassfyUniversalCode(
+        universalCode: String,
+        force: Boolean
+    ): Resource<Unit> =
+        withSdkInitializedOrError { _connectGlassfyUniversalCode(universalCode, force) }
+
     internal suspend fun storeInfo(): Resource<StoresInfo> =
         withSdkInitializedOrError { repository.storeInfo() }
 
@@ -403,6 +409,10 @@ internal class GManager : LifecycleEventObserver {
         return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
+    private suspend fun _connectGlassfyUniversalCode(universalCode: String, force: Boolean): Resource<Unit> {
+        val res = repository.connectGlassfyUniversalCode(ConnectRequest.universalCode(universalCode, force))
+        return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
+    }
 
     /// LifecycleEventObserver
 

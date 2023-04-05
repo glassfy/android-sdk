@@ -24,6 +24,7 @@ internal interface IRepository {
     suspend fun initialize(init: InitializeRequest): Resource<ServerInfo>
     suspend fun connectCustomSubscriber(connect: ConnectRequest): Resource<Unit>
     suspend fun connectPaddleLicense(connect: ConnectRequest): Resource<Unit>
+    suspend fun connectGlassfyUniversalCode(connect: ConnectRequest): Resource<Unit>
     suspend fun storeInfo(): Resource<StoresInfo>
     suspend fun setUserProperty(req: UserPropertiesRequest): Resource<Unit>
     suspend fun getUserProperty(): Resource<UserProperties>
