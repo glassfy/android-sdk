@@ -2,6 +2,8 @@ package io.glassfy.androidsdk
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import io.glassfy.androidsdk.BuildConfig.SDK_VERSION
 import io.glassfy.androidsdk.internal.GManager
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
@@ -99,6 +101,18 @@ object Glassfy {
     }
 
     /**
+     * Returns a Paywall object which can be used to build a fragment later on.
+     *
+     * @param remoteConfigurationId Remote configuration identifier
+     * @param callback Completion callback with results
+     */
+    @RequiresApi(Build.VERSION_CODES.N)
+    @JvmStatic
+    fun paywall(remoteConfigurationId: String, callback: PaywallCallback) {
+        customScope.runAndPostResult(callback) { manager.paywall(remoteConfigurationId) }
+    }
+
+    /**
      * Set purchase delegate
      *
      * @param delegate Interface implementing [io.glassfy.androidsdk.PurchaseDelegate]
@@ -127,7 +141,6 @@ object Glassfy {
     fun offerings(callback: OfferingsCallback) {
         customScope.runAndPostResult(callback) { manager.offerings() }
     }
-
 
     /**
      * Fetch Sku

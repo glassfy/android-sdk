@@ -1,4 +1,4 @@
-import io.glassfy.androidsdk.Configuration
+import io.glassfy.paywall.Configuration
 
 plugins {
     id("com.android.library")
@@ -7,6 +7,7 @@ plugins {
     id("maven-publish")
     id("signing")
     id("org.jetbrains.dokka")
+    id("org.jetbrains.kotlin.plugin.parcelize")
 }
 
 android {
@@ -20,6 +21,7 @@ android {
 
         sourceSets.getByName("main") {
             java.srcDir("src/main/java")
+            res.srcDir("src/main/res")
         }
 
         buildConfigField("String", "SDK_VERSION", "\"${rootProject.version}\"")
@@ -48,7 +50,7 @@ android {
         resources.excludes += "DebugProbesKt.bin"
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    namespace = "io.glassfy.androidsdk"
+    namespace = "io.glassfy.paywall"
 
     publishing {
         // To publish just one variant, use singleVariant to publish only release
@@ -57,29 +59,21 @@ android {
 }
 
 dependencies {
-    // Lifecycle
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.4.1")
-    implementation("androidx.lifecycle:lifecycle-process:2.4.1")
-
-    // Android Coroutines
+    implementation(project(":glassfy"))
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.8.20")
+    implementation("com.google.android.material:material:1.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-process:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.6.1")
+    implementation("androidx.fragment:fragment-ktx:1.5.7")
+    implementation("com.google.android.material:material:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
-
-    // BillingClient
-    implementation("com.android.billingclient:billing-ktx:4.1.0")
-
-    // Retrofit + OKHttp + Moshi
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.10.0")
-    implementation("com.squareup.moshi:moshi:1.14.0")
-    implementation("com.squareup.moshi:moshi-kotlin:1.14.0")
-    implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
-    kapt("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
-
+    implementation("androidx.fragment:fragment:1.5.7")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
-
-    androidTestImplementation("androidx.test.ext:junit:1.1.3")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.4.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
 // Sources
@@ -88,8 +82,9 @@ val androidSourcesJar = tasks.register<Jar>("androidSourcesJar") {
 
     if (project.plugins.findPlugin("com.android.library") != null) {
         from(android.sourceSets["main"].java.srcDirs)
+        from(android.sourceSets["main"].res.srcDirs)
     } else {
-        from(sourceSets["main"].java.srcDirs)
+        from(sourceSets["main"].allSource)
     }
 }
 
@@ -131,7 +126,7 @@ afterEvaluate {
                 val vcs = "https://github.com/glassfy/android-SDK"
                 pom {
                     name.set(Configuration.artifactId)
-                    description.set("Glassfy SDK for android platform")
+                    description.set("Glassfy Paywall SDK for android platform")
                     url.set(vcs)
 
                     licenses {

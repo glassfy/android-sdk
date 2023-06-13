@@ -2,6 +2,7 @@ package io.glassfy.androidsdk.internal.network
 
 import io.glassfy.androidsdk.internal.network.model.request.*
 import io.glassfy.androidsdk.internal.network.model.response.*
+import io.glassfy.androidsdk.paywall.PaywallResponse
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -60,4 +61,8 @@ internal interface IApiService {
 
     @GET("/v0/purchases")
     suspend fun getPurchaseHistory(): Response<PurchaseHistoryResponse>
+
+    @GET("/v1/paywall")
+    suspend fun getPaywall(@Query("identifier") paywallId: String,
+                           @Query("locale") locale: String): Response<PaywallResponse>
 }

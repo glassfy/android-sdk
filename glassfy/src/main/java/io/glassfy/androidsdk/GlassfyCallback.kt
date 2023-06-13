@@ -2,6 +2,7 @@ package io.glassfy.androidsdk
 
 import androidx.annotation.UiThread
 import io.glassfy.androidsdk.model.*
+import io.glassfy.androidsdk.paywall.Paywall
 
 fun interface ErrorCallback {
     @UiThread
@@ -30,3 +31,5 @@ fun interface StoreCallback : Callback<StoresInfo>
 fun interface UserPropertiesCallback : Callback<UserProperties>
 
 fun interface PurchaseHistoryCallback : Callback<PurchasesHistory>
+
+fun interface PaywallCallback : Callback<Paywall>

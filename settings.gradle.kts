@@ -32,3 +32,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Glassfy"
 include(":glassfy")
+include(":paywall")

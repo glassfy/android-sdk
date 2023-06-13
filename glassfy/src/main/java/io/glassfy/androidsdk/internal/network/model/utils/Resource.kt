@@ -8,7 +8,6 @@ internal sealed class Resource<T>(
 ) {
     class Success<T>(data: T) : Resource<T>(data)
     class Error<T>(err: GlassfyError, data: T? = null) : Resource<T>(data, err)
-//    class Empty<Unit>(): Resource<Unit>()
 }
 
 

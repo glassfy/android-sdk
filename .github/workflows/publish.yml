@@ -18,9 +18,9 @@ jobs:
       - name: Release build
         run: ./gradlew assembleRelease
       - name: Source jar and dokka
-        run: ./gradlew :glassfy:androidSourcesJar :glassfy:javadocJar
+        run: ./gradlew :glassfy:androidSourcesJar :glassfy:javadocJar :paywall:androidSourcesJar :paywall:javadocJar
       - name: Publish to MavenCentral
-        run: ./gradlew :glassfy:publishReleasePublicationToSonatypeRepository
+        run: ./gradlew :glassfy:publishReleasePublicationToSonatypeRepository :paywall:publishReleasePublicationToSonatypeRepository
         # auto-close staging repository
         # run: ./gradlew :glassfy:publishReleasePublicationToSonatypeRepository --max-workers 1 :glassfy:closeAndReleaseSonatypeStagingRepository
         env:

@@ -5,7 +5,7 @@ import io.glassfy.androidsdk.Glassfy
 import io.glassfy.androidsdk.LogLevel
 
 
-internal object Logger {
+object Logger {
     private val TAG by lazy { Glassfy::class.java.simpleName }
 
     var loglevel: LogLevel = LogLevel.DEBUG

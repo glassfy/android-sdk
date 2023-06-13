@@ -24,9 +24,11 @@ enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
     NotFoundOnGlassfy,
     NotFoundOnStore,
 
+    CouldNotBuildPaywall,
+
     UnknowError;
 
-    internal fun toError(debug: String? = null): GlassfyError {
+    fun toError(debug: String? = null): GlassfyError {
         return GlassfyError(this, description(), debug)
     }
 
@@ -49,6 +51,7 @@ enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
             HttpException -> "HttpException"
             NotFoundOnGlassfy -> "Product not found on Glassfy. Did you add to the dashboard?"
             NotFoundOnStore -> "Product not found on Store"
+            CouldNotBuildPaywall -> "Failed to build paywall"
             UnknowError -> "Unexpected error"
         }
     }

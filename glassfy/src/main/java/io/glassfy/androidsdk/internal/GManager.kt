@@ -1,6 +1,10 @@
 package io.glassfy.androidsdk.internal
 
 import android.app.Activity
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
@@ -8,10 +12,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.Purchase.PurchaseState.PURCHASED
 import com.squareup.moshi.Moshi
-import io.glassfy.androidsdk.Glassfy
-import io.glassfy.androidsdk.GlassfyErrorCode
-import io.glassfy.androidsdk.LogLevel
-import io.glassfy.androidsdk.PurchaseDelegate
+import io.glassfy.androidsdk.*
 import io.glassfy.androidsdk.internal.billing.IBillingService
 import io.glassfy.androidsdk.internal.billing.google.PlayBillingService
 import io.glassfy.androidsdk.internal.cache.CacheManager
@@ -29,6 +30,8 @@ import io.glassfy.androidsdk.internal.network.model.utils.*
 import io.glassfy.androidsdk.internal.repository.IRepository
 import io.glassfy.androidsdk.internal.repository.Repository
 import io.glassfy.androidsdk.model.*
+import io.glassfy.androidsdk.paywall.Paywall
+import io.glassfy.androidsdk.paywall.PaywallTypeAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -100,7 +103,11 @@ internal class GManager : LifecycleEventObserver {
         val appContext = ctx.applicationContext
         packageName = appContext.packageName
         installTime = packageName?.runCatching {
-            appContext.packageManager.getPackageInfo(this, 0).firstInstallTime
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ctx.packageManager.getPackageInfo(this, PackageManager.PackageInfoFlags.of(0)).firstInstallTime
+            } else {
+                @Suppress("DEPRECATION") ctx.packageManager.getPackageInfo(this, 0).firstInstallTime
+            }
         }?.getOrNull()
         cacheManager = CacheManager(appContext.applicationContext)
         val deviceManager: IDeviceManager = DeviceManager(appContext.applicationContext)
@@ -117,7 +124,6 @@ internal class GManager : LifecycleEventObserver {
         withContext(Dispatchers.Main) {
             ProcessLifecycleOwner.get().lifecycle.addObserver(Glassfy.manager)
         }
-
         return Resource.Success(true)
     }
 
@@ -198,6 +204,10 @@ internal class GManager : LifecycleEventObserver {
 
     internal suspend fun getUserProperties(): Resource<UserProperties> =
         withSdkInitializedOrError { repository.getUserProperty() }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    internal suspend fun paywall(remoteConfigurationId: String): Resource<Paywall> =
+        withSdkInitializedOrError { _paywall(remoteConfigurationId) }
 
     internal suspend fun setAttribution(
         type: AttributionItem.Type,
@@ -414,6 +424,29 @@ internal class GManager : LifecycleEventObserver {
         return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
+    private suspend fun _paywall(remoteConfigurationId: String): Resource<Paywall> {
+        val pRes = repository.paywall(remoteConfigurationId)
+        if (pRes.err != null) return Resource.Error(pRes.err)
+        if (pRes.data == null || pRes.data.skus.isEmpty()) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
+
+        val dRes = pRes.data.skus
+            .map {  s -> s.productId }
+            .toSet()
+            .let { billingService.skuDetails(it) }
+        if (dRes.err != null) return Resource.Error(dRes.err)
+        if (dRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
+
+        pRes.data.skus = pRes.data.skus
+            .filter { sku -> dRes.data.map { it.sku }.contains(sku.productId) }
+        pRes.data.skus.forEach { s ->
+            dRes.data.find { detail -> detail.sku == s.productId }
+                ?.let { detail -> s.product = detail }
+        }
+
+        return Resource.Success(pRes.data)
+    }
+
     /// LifecycleEventObserver
 
     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
@@ -452,7 +485,6 @@ internal class GManager : LifecycleEventObserver {
                     .build()
                 c.proceed(r)
             }
-//            .addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
             .build()
 
         val moshi = Moshi.Builder()
@@ -461,6 +493,7 @@ internal class GManager : LifecycleEventObserver {
             .add(StoreInfoAdapter())
             .add(EventTypeAdapter())
             .add(UserPropertiesAdapter())
+            .add(PaywallTypeAdapter())
             // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
             .build()
 
@@ -473,16 +506,20 @@ internal class GManager : LifecycleEventObserver {
 
     private suspend inline fun <T> withSdkInitializedOrError(
         block: () -> Resource<T>
-    ): Resource<T> =
-        withSdkInitialized()?.let { block() }
+    ): Resource<T> {
+        return withSdkInitialized()
+            ?.let { block() }
             ?: Resource.Error(GlassfyErrorCode.SDKNotInitialized.toError())
+    }
 
-    private suspend fun withSdkInitialized(): Boolean? = withTimeoutOrNull(INITIALIZED_TIMEOUT_MS) {
-        // try initialization again if previously failed
-        if (state.value == SdkState.Failed) {
-            _initialize()
+    private suspend fun withSdkInitialized(): Boolean? {
+        return withTimeoutOrNull(INITIALIZED_TIMEOUT_MS) {
+            // try initialization again if previously failed
+            if (state.value == SdkState.Failed) {
+                _initialize()
+            }
+            state.first { it == SdkState.Initialized }
+            true
         }
-        state.first { it == SdkState.Initialized }
-        true
     }
 }

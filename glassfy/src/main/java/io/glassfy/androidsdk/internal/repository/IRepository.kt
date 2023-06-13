@@ -7,6 +7,7 @@ import io.glassfy.androidsdk.internal.network.model.request.UserPropertiesReques
 import io.glassfy.androidsdk.internal.network.model.response.ServerInfo
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
 import io.glassfy.androidsdk.model.*
+import io.glassfy.androidsdk.paywall.Paywall
 
 internal interface IRepository {
     suspend fun skuByIdentifier(id: String): Resource<Sku>
@@ -30,4 +31,5 @@ internal interface IRepository {
     suspend fun getUserProperty(): Resource<UserProperties>
     suspend fun setAttributions(req: Map<String, String?>): Resource<Unit>
     suspend fun getPurchaseHistory(): Resource<PurchasesHistory>
+    suspend fun paywall(id: String): Resource<Paywall>
 }
