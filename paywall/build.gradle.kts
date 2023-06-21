@@ -59,7 +59,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":glassfy"))
+    api(project(":glassfy"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.8.20")
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")

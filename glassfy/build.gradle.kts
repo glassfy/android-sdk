@@ -65,7 +65,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
     // BillingClient
-    implementation("com.android.billingclient:billing-ktx:4.1.0")
+    implementation("com.android.billingclient:billing-ktx:5.1.0")
 
     // Retrofit + OKHttp + Moshi
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
