@@ -3,18 +3,22 @@ import io.glassfy.androidsdk.Configuration
 plugins {
     id("com.android.library")
     kotlin("android")
-    kotlin("kapt")
+    id("com.google.devtools.ksp")
     id("maven-publish")
     id("signing")
     id("org.jetbrains.dokka")
 }
 
+tasks.withType(com.google.devtools.ksp.gradle.KspTaskJvm::class).configureEach {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
 android {
+    namespace = "io.glassfy.androidsdk"
     compileSdk = Configuration.compileSdk
 
     defaultConfig {
         minSdk = Configuration.minSdk
-        targetSdk = Configuration.targetSdk
 
         consumerProguardFiles("consumer-rules.pro")
 
@@ -26,7 +30,7 @@ android {
     }
 
     buildTypes {
-        getByName("release") {
+        release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -34,7 +38,6 @@ android {
             )
         }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -48,7 +51,6 @@ android {
         resources.excludes += "DebugProbesKt.bin"
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    namespace = "io.glassfy.androidsdk"
 
     publishing {
         // To publish just one variant, use singleVariant to publish only release
@@ -65,15 +67,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
     // BillingClient
-    implementation("com.android.billingclient:billing-ktx:5.1.0")
+    implementation("com.android.billingclient:billing-ktx:5.2.1")
 
     // Retrofit + OKHttp + Moshi
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.10.0")
-    implementation("com.squareup.moshi:moshi:1.14.0")
-    implementation("com.squareup.moshi:moshi-kotlin:1.14.0")
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    implementation("com.squareup.moshi:moshi:1.15.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
-    kapt("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")

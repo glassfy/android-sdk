@@ -3,7 +3,6 @@ import io.glassfy.paywall.Configuration
 plugins {
     id("com.android.library")
     kotlin("android")
-    kotlin("kapt")
     id("maven-publish")
     id("signing")
     id("org.jetbrains.dokka")
@@ -11,11 +10,11 @@ plugins {
 }
 
 android {
+    namespace = "io.glassfy.paywall"
     compileSdk = Configuration.compileSdk
 
     defaultConfig {
         minSdk = Configuration.minSdk
-        targetSdk = Configuration.targetSdk
 
         consumerProguardFiles("consumer-rules.pro")
 
@@ -28,7 +27,7 @@ android {
     }
 
     buildTypes {
-        getByName("release") {
+        release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -36,7 +35,6 @@ android {
             )
         }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -50,7 +48,6 @@ android {
         resources.excludes += "DebugProbesKt.bin"
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    namespace = "io.glassfy.paywall"
 
     publishing {
         // To publish just one variant, use singleVariant to publish only release

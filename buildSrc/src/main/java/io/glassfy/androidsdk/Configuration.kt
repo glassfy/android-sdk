@@ -6,7 +6,7 @@ object Configuration {
     const val minSdk = 21
     private const val majorVersion = 1
     private const val minorVersion = 5
-    private const val patchVersion = 0
+    private const val patchVersion = 1
     const val versionName = "$majorVersion.$minorVersion.$patchVersion"
     const val snapshotVersionName = "${versionName}-SNAPSHOT"
     const val artifactGroup = "io.glassfy"

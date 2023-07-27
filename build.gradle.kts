@@ -4,7 +4,7 @@ plugins {
     id("com.android.library") apply false
     kotlin("android") apply false
     kotlin("jvm") apply false
-    kotlin("kapt") apply false
+    id("com.google.devtools.ksp") apply false
     id("io.github.gradle-nexus.publish-plugin") apply true
 }
 
