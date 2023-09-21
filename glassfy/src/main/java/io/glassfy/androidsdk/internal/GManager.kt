@@ -1,7 +1,6 @@
 package io.glassfy.androidsdk.internal
 
 import android.app.Activity
-import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -13,6 +12,7 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.Purchase.PurchaseState.PURCHASED
 import com.squareup.moshi.Moshi
 import io.glassfy.androidsdk.*
+import io.glassfy.androidsdk.internal.billing.IBillingPurchaseDelegate
 import io.glassfy.androidsdk.internal.billing.IBillingService
 import io.glassfy.androidsdk.internal.billing.google.PlayBillingService
 import io.glassfy.androidsdk.internal.cache.CacheManager
@@ -42,18 +42,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.util.concurrent.TimeUnit
 
 
-internal class GManager : LifecycleEventObserver {
+internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
     companion object {
         private const val INITIALIZED_TIMEOUT_MS = 10000L
     }
 
     private enum class SdkState {
-        NotInitialized,
-        Initializing,
-        Failed,
-        Initialized
+        NotInitialized, Initializing, Failed, Initialized
     }
 
     private val state = MutableStateFlow(SdkState.NotInitialized)
@@ -104,7 +102,9 @@ internal class GManager : LifecycleEventObserver {
         packageName = appContext.packageName
         installTime = packageName?.runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ctx.packageManager.getPackageInfo(this, PackageManager.PackageInfoFlags.of(0)).firstInstallTime
+                ctx.packageManager.getPackageInfo(
+                    this, PackageManager.PackageInfoFlags.of(0)
+                ).firstInstallTime
             } else {
                 @Suppress("DEPRECATION") ctx.packageManager.getPackageInfo(this, 0).firstInstallTime
             }
@@ -113,8 +113,7 @@ internal class GManager : LifecycleEventObserver {
         val deviceManager: IDeviceManager = DeviceManager(appContext.applicationContext)
         val apiService: IApiService = makeApiService(cacheManager, deviceManager, apiKey)
         repository = Repository(apiService)
-        billingService = PlayBillingService(appContext, watcherMode)
-        billingService.setDelegate(_delegate)
+        billingService = PlayBillingService(this, appContext, watcherMode)
 
         val res = _initialize(crossPlatformSdkFramework, crossPlatformSdkVersion)
         if (res.err != null) {
@@ -127,12 +126,8 @@ internal class GManager : LifecycleEventObserver {
         return Resource.Success(true)
     }
 
-    internal suspend fun setPurchaseDelegate(delegate: PurchaseDelegate) {
+    internal fun setPurchaseDelegate(delegate: PurchaseDelegate) {
         _delegate = delegate
-
-        withSdkInitialized()?.also {
-            billingService.setDelegate(_delegate)
-        }
     }
 
     internal fun setLogLevel(level: LogLevel) {
@@ -140,28 +135,20 @@ internal class GManager : LifecycleEventObserver {
     }
 
     internal suspend fun purchase(
-        activity: Activity,
-        sku: Sku,
-        upgradeSku: SubscriptionUpdate?
-    ): Resource<Transaction> =
-        withSdkInitializedOrError {
-            _purchase(
-                activity,
-                sku,
-                upgradeSku,
-                cacheManager.subscriberId
-            )
-        }
+        activity: Activity, sku: Sku, upgradeSku: SubscriptionUpdate?
+    ): Resource<Transaction> = withSdkInitializedOrError {
+        _purchase(
+            activity, sku, upgradeSku, cacheManager.subscriberId
+        )
+    }
 
-    internal suspend fun permissions(): Resource<Permissions> =
-        withSdkInitializedOrError {
-            repository.permissions().apply {
-                data?.installationId_ = cacheManager.installationId
-            }
+    internal suspend fun permissions(): Resource<Permissions> = withSdkInitializedOrError {
+        repository.permissions().apply {
+            data?.installationId_ = cacheManager.installationId
         }
+    }
 
-    internal suspend fun restore(): Resource<Permissions> =
-        withSdkInitializedOrError { _restore() }
+    internal suspend fun restore(): Resource<Permissions> = withSdkInitializedOrError { _restore() }
 
     internal suspend fun sku(identifier: String): Resource<Sku> =
         withSdkInitializedOrError { _playstoresku(identifier) }
@@ -179,14 +166,11 @@ internal class GManager : LifecycleEventObserver {
         withSdkInitializedOrError { _connectCustomSubscriber(customId) }
 
     internal suspend fun connectPaddleLicenseKey(
-        licenseKey: String,
-        force: Boolean
-    ): Resource<Unit> =
-        withSdkInitializedOrError { _connectPaddleLicense(licenseKey, force) }
+        licenseKey: String, force: Boolean
+    ): Resource<Unit> = withSdkInitializedOrError { _connectPaddleLicense(licenseKey, force) }
 
     internal suspend fun connectGlassfyUniversalCode(
-        universalCode: String,
-        force: Boolean
+        universalCode: String, force: Boolean
     ): Resource<Unit> =
         withSdkInitializedOrError { _connectGlassfyUniversalCode(universalCode, force) }
 
@@ -210,10 +194,8 @@ internal class GManager : LifecycleEventObserver {
         withSdkInitializedOrError { _paywall(remoteConfigurationId) }
 
     internal suspend fun setAttribution(
-        type: AttributionItem.Type,
-        value: String?
-    ): Resource<Unit> =
-        setAttributions(listOf(AttributionItem(type, value)))
+        type: AttributionItem.Type, value: String?
+    ): Resource<Unit> = setAttributions(listOf(AttributionItem(type, value)))
 
     internal suspend fun setAttributions(attributions: List<AttributionItem>): Resource<Unit> =
         withSdkInitializedOrError {
@@ -230,8 +212,7 @@ internal class GManager : LifecycleEventObserver {
     /// Impl
 
     private suspend fun _initialize(
-        crossPlatformSdkFramework: String? = null,
-        crossPlatformSdkVersion: String? = null
+        crossPlatformSdkFramework: String? = null, crossPlatformSdkVersion: String? = null
     ): Resource<Boolean> {
         state.emit(SdkState.Initializing)
 
@@ -240,17 +221,29 @@ internal class GManager : LifecycleEventObserver {
             state.emit(SdkState.Failed)
             return Resource.Error(inappHRes.err)
         }
-
         val subsHRes = billingService.subsPurchaseHistory()
         if (subsHRes.err != null) {
             state.emit(SdkState.Failed)
             return Resource.Error(subsHRes.err)
         }
 
+        val inappRes = billingService.inAppPurchases()
+        if (inappRes.err != null) {
+            state.emit(SdkState.Failed)
+            return Resource.Error(inappRes.err)
+        }
+        val subsRes = billingService.subsPurchases()
+        if (subsRes.err != null) {
+            state.emit(SdkState.Failed)
+            return Resource.Error(subsRes.err)
+        }
+
         val initReq = InitializeRequest.from(
             packageName ?: "",
             subsHRes.data.orEmpty(),
             inappHRes.data.orEmpty(),
+            subsRes.data.orEmpty(),
+            inappRes.data.orEmpty(),
             installTime,
             crossPlatformSdkFramework,
             crossPlatformSdkVersion
@@ -270,21 +263,18 @@ internal class GManager : LifecycleEventObserver {
 
         // consume/ack purchases
         if (!watcherMode) {
-            billingService.inAppPurchases().data?.forEach {
+            inappRes.data?.forEach {
                 billingService.consume(it.purchaseToken)
-                withContext(Dispatchers.Main) {
-                    _delegate?.onProductPurchase(it)
-                }
+                onProductPurchase(it, false)
             }
-            billingService.subsPurchases().data?.forEach {
+            subsRes.data?.forEach {
                 if (!it.isAcknowledged) {
                     billingService.acknowledge(it.purchaseToken)
-                    withContext(Dispatchers.Main) {
-                        _delegate?.onProductPurchase(it)
-                    }
+                    onProductPurchase(it, true)
                 }
             }
         }
+
         state.emit(SdkState.Initialized)
 
         return Resource.Success(true)
@@ -295,9 +285,7 @@ internal class GManager : LifecycleEventObserver {
         if (offRes.err != null) return offRes
         if (offRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-        val detailRes = offRes.data.all
-            .flatMap { it.skus.map { s -> s.productId } }
-            .toSet()
+        val detailRes = offRes.data.all.flatMap { it.skus.map { s -> s.productId } }.toSet()
             .let { billingService.skuDetails(it) }
         if (detailRes.err != null) return Resource.Error(detailRes.err)
         if (detailRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
@@ -305,8 +293,7 @@ internal class GManager : LifecycleEventObserver {
         for (o in offRes.data.all) {
             o.skus_ = o.skus.filter { sku -> detailRes.data.map { it.sku }.contains(sku.productId) }
                 .map { s ->
-                    detailRes.data
-                        .find { detail -> detail.sku == s.productId }
+                    detailRes.data.find { detail -> detail.sku == s.productId }
                         ?.let { detail -> s.product = detail }
                     return@map s
                 }
@@ -315,10 +302,7 @@ internal class GManager : LifecycleEventObserver {
     }
 
     private suspend fun _purchase(
-        activity: Activity,
-        sku: Sku,
-        upgradeSku: SubscriptionUpdate?,
-        accountId: String?
+        activity: Activity, sku: Sku, upgradeSku: SubscriptionUpdate?, accountId: String?
     ): Resource<Transaction> {
         if (upgradeSku != null) {
             val res = repository.skuByIdentifier(upgradeSku.originalSku)
@@ -326,8 +310,7 @@ internal class GManager : LifecycleEventObserver {
 
             val purchases = billingService.allPurchases()
             if (purchases.err != null) return Resource.Error(purchases.err)
-            purchases.data
-                ?.firstOrNull { it.skus.contains(res.data?.productId ?: "") }
+            purchases.data?.firstOrNull { it.skus.contains(res.data?.productId ?: "") }
                 ?.let { upgradeSku.purchaseToken = it.purchaseToken }
 
             if (upgradeSku.purchaseToken.isEmpty()) {
@@ -357,8 +340,7 @@ internal class GManager : LifecycleEventObserver {
         if (subsHistoryRes.err != null) return Resource.Error(subsHistoryRes.err)
 
         return repository.restoreTokens(
-            subsHistoryRes.data.orEmpty(),
-            inappHistoryRes.data.orEmpty()
+            subsHistoryRes.data.orEmpty(), inappHistoryRes.data.orEmpty()
         )
     }
 
@@ -381,7 +363,7 @@ internal class GManager : LifecycleEventObserver {
         return skuRes.data.let {
             val detailRes = billingService.skuDetails(setOf(it.productId))
             if (detailRes.err != null) return Resource.Error(detailRes.err)
-            if (detailRes.data == null || detailRes.data.isEmpty()) return Resource.Error(
+            if (detailRes.data.isNullOrEmpty()) return Resource.Error(
                 GlassfyErrorCode.NotFoundOnStore.toError()
             )
 
@@ -399,7 +381,7 @@ internal class GManager : LifecycleEventObserver {
         return skuRes.data.let {
             val detailRes = billingService.skuDetails(setOf(it.productId))
             if (detailRes.err != null) return Resource.Error(detailRes.err)
-            if (detailRes.data == null || detailRes.data.isEmpty()) return Resource.Error(
+            if (detailRes.data.isNullOrEmpty()) return Resource.Error(
                 GlassfyErrorCode.NotFoundOnStore.toError()
             )
 
@@ -419,8 +401,14 @@ internal class GManager : LifecycleEventObserver {
         return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
-    private suspend fun _connectGlassfyUniversalCode(universalCode: String, force: Boolean): Resource<Unit> {
-        val res = repository.connectGlassfyUniversalCode(ConnectRequest.universalCode(universalCode, force))
+    private suspend fun _connectGlassfyUniversalCode(
+        universalCode: String, force: Boolean
+    ): Resource<Unit> {
+        val res = repository.connectGlassfyUniversalCode(
+            ConnectRequest.universalCode(
+                universalCode, force
+            )
+        )
         return if (res.err != null) Resource.Error(res.err) else Resource.Success(Unit)
     }
 
@@ -430,15 +418,13 @@ internal class GManager : LifecycleEventObserver {
         if (pRes.err != null) return Resource.Error(pRes.err)
         if (pRes.data == null || pRes.data.skus.isEmpty()) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-        val dRes = pRes.data.skus
-            .map {  s -> s.productId }
-            .toSet()
-            .let { billingService.skuDetails(it) }
+        val dRes =
+            pRes.data.skus.map { s -> s.productId }.toSet().let { billingService.skuDetails(it) }
         if (dRes.err != null) return Resource.Error(dRes.err)
         if (dRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
 
-        pRes.data.skus = pRes.data.skus
-            .filter { sku -> dRes.data.map { it.sku }.contains(sku.productId) }
+        pRes.data.skus =
+            pRes.data.skus.filter { sku -> dRes.data.map { it.sku }.contains(sku.productId) }
         pRes.data.skus.forEach { s ->
             dRes.data.find { detail -> detail.sku == s.productId }
                 ?.let { detail -> s.product = detail }
@@ -451,10 +437,10 @@ internal class GManager : LifecycleEventObserver {
 
     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
         when (event) {
-            Lifecycle.Event.ON_START ->
-                Glassfy.customScope.launch {
-                    onStartProcessState()
-                }
+            Lifecycle.Event.ON_START -> Glassfy.customScope.launch {
+                onStartProcessState()
+            }
+
             else -> {
 //                Logger.logDebug("${event.name} - ${Thread.currentThread().name}")
             }
@@ -467,48 +453,36 @@ internal class GManager : LifecycleEventObserver {
     /// Utils
 
     private fun makeApiService(
-        cacheManager: ICacheManager,
-        deviceManager: IDeviceManager,
-        apiKey: String
+        cacheManager: ICacheManager, deviceManager: IDeviceManager, apiKey: String
     ): IApiService {
-        val httpClient = OkHttpClient.Builder()
+        val httpClient = OkHttpClient.Builder().readTimeout(20L, TimeUnit.SECONDS)
+            .writeTimeout(20L, TimeUnit.SECONDS).connectTimeout(20L, TimeUnit.SECONDS)
             .addInterceptor { c ->
                 val original = c.request()
-                val url = original.url.newBuilder()
-                    .addEncodedQueryParameter("glii", deviceManager.glii)
-                    .addEncodedQueryParameter("installationid", cacheManager.installationId)
-                    .addEncodedQueryParameter("subscriberid", cacheManager.subscriberId)
-                    .build()
-                val r = c.request().newBuilder()
-                    .header("Authorization", "Bearer $apiKey")
-                    .url(url)
+                val url =
+                    original.url.newBuilder().addEncodedQueryParameter("glii", deviceManager.glii)
+                        .addEncodedQueryParameter("installationid", cacheManager.installationId)
+                        .addEncodedQueryParameter("subscriberid", cacheManager.subscriberId).build()
+                val r = c.request().newBuilder().header("Authorization", "Bearer $apiKey").url(url)
                     .build()
                 c.proceed(r)
-            }
-            .build()
+            }.build()
 
-        val moshi = Moshi.Builder()
-            .add(EntitlementAdapter())
-            .add(StoreAdapter())
-            .add(StoreInfoAdapter())
-            .add(EventTypeAdapter())
-            .add(UserPropertiesAdapter())
-            .add(PaywallTypeAdapter())
-            // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
-            .build()
+        val moshi =
+            Moshi.Builder().add(EntitlementAdapter()).add(StoreAdapter()).add(StoreInfoAdapter())
+                .add(EventTypeAdapter()).add(UserPropertiesAdapter()).add(PaywallTypeAdapter())
+                // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
+                .build()
 
-        return Retrofit.Builder()
-            .client(httpClient)
-            .baseUrl("https://api.glassfy.io")
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
-            .build().create(IApiService::class.java)
+        return Retrofit.Builder().client(httpClient).baseUrl("https://api.glassfy.io")
+            .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
+            .create(IApiService::class.java)
     }
 
     private suspend inline fun <T> withSdkInitializedOrError(
         block: () -> Resource<T>
     ): Resource<T> {
-        return withSdkInitialized()
-            ?.let { block() }
+        return withSdkInitialized()?.let { block() }
             ?: Resource.Error(GlassfyErrorCode.SDKNotInitialized.toError())
     }
 
@@ -520,6 +494,18 @@ internal class GManager : LifecycleEventObserver {
             }
             state.first { it == SdkState.Initialized }
             true
+        }
+    }
+
+
+    //// IBillingPurchaseDelegate
+    override suspend fun onProductPurchase(p: Purchase, isSubscription: Boolean) {
+        withContext(Dispatchers.Main) {
+            _delegate?.onProductPurchase(p)
+        }
+
+        if (watcherMode) {
+            repository.token(TokenRequest.from(p, isSubscription))
         }
     }
 }

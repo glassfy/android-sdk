@@ -37,8 +37,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Glassfy"
-include(":newsreader-kotlin")
-include(":newsreader-java")
 include(":glassfy")
 include(":paywall")
-include(":showcase")

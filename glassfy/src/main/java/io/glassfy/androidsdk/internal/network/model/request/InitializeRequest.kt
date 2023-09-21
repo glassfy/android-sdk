@@ -3,6 +3,7 @@ package io.glassfy.androidsdk.internal.network.model.request
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import io.glassfy.androidsdk.model.HistoryPurchase
+import io.glassfy.androidsdk.model.Purchase
 
 @JsonClass(generateAdapter = true)
 internal data class InitializeRequest(
@@ -20,16 +21,20 @@ internal data class InitializeRequest(
     companion object {
         internal fun from(
             applicationId: String,
-            subs: List<HistoryPurchase>,
-            inapp: List<HistoryPurchase>,
+            hSubs: List<HistoryPurchase>,
+            hInapp: List<HistoryPurchase>,
+            subs: List<Purchase>,
+            inapp: List<Purchase>,
             installTime: Long?,
             crossPlatformSdkFramework: String?,
             crossPlatformSdkVersion: String?,
         ) =
             InitializeRequest(
                 applicationId,
-                subs.map { TokenRequest.from(it, true) } +
-                        inapp.map { TokenRequest.from(it, false) },
+                hSubs.map { TokenRequest.from(it, true) } +
+                        hInapp.map { TokenRequest.from(it, false) } +
+                        subs.map { TokenRequest.from(it, true) } +
+                        inapp.map { TokenRequest.from(it, false) } ,
                 installTime,
                 crossPlatformSdkFramework,
                 crossPlatformSdkVersion,

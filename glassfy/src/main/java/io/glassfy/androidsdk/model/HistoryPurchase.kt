@@ -6,7 +6,7 @@ data class HistoryPurchase(
     val purchaseToken: String,
     val quantity: Int,
     val signature: String,
-    val skus: ArrayList<String>,
+    val skus: List<String>,
     val hashCode: Int,
     val originalJson: String
 ) {

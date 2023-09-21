@@ -2,24 +2,43 @@ package io.glassfy.androidsdk.internal.billing.google
 
 import android.app.Activity
 import android.content.Context
-import com.android.billingclient.api.*
+import com.android.billingclient.api.AcknowledgePurchaseParams
+import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClient.SkuType.INAPP
 import com.android.billingclient.api.BillingClient.SkuType.SUBS
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingFlowParams
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.Purchase.PurchaseState.PURCHASED
+import com.android.billingclient.api.PurchaseHistoryRecord
+import com.android.billingclient.api.SkuDetails
+import com.android.billingclient.api.SkuDetailsParams
+import com.android.billingclient.api.acknowledgePurchase
+import com.android.billingclient.api.consumePurchase
+import com.android.billingclient.api.queryPurchaseHistory
+import com.android.billingclient.api.queryPurchasesAsync
+import com.android.billingclient.api.querySkuDetails
 import io.glassfy.androidsdk.Glassfy
 import io.glassfy.androidsdk.internal.billing.google.PlayBillingService.Companion.PURCHASING
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.model.SubscriptionUpdate
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 internal class PlayBillingClientWrapper(
     ctx: Context,
-    private val delegate: PlayBillingPurchaseDelegate,
+    private val delegate: IPlayBillingPurchaseDelegate,
     private val watcherMode: Boolean
 ) {
     companion object {
@@ -28,13 +47,9 @@ internal class PlayBillingClientWrapper(
     }
 
     private val billingClient by lazy {
-        BillingClient
-            .newBuilder(ctx)
-            .enablePendingPurchases()
-            .setListener { r, p ->
-                Glassfy.customScope.launch { handlePurchasesUpdate(r, p) }
-            }
-            .build()
+        BillingClient.newBuilder(ctx).enablePendingPurchases().setListener { r, p ->
+            Glassfy.customScope.launch { handlePurchasesUpdate(r, p) }
+        }.build()
     }
 
     private val purchasingSku = mutableMapOf<String, String>()
@@ -47,29 +62,24 @@ internal class PlayBillingClientWrapper(
         mutableMapOf<String, Continuation<PlayBillingResource<Purchase>>>()
 
     private suspend fun handlePurchasesUpdate(
-        billingResult: BillingResult,
-        purchases: List<Purchase>?
+        billingResult: BillingResult, purchases: List<Purchase>?
     ) {
         if (billingResult.isOk()) {
             purchases?.forEach { purchase ->
                 if (purchase.purchaseState == PURCHASED) {
-                    // 1 - process purchase
-                    if (!watcherMode) {
-                        processPurchases(purchase)
-                    }
-
-                    // 2 - call delegate
-                    withContext(Dispatchers.Main) {
-                        delegate.onPlayBillingPurchasePurchase(purchase)
+                    findProductsType(purchase.products)?.also { productType ->
+                        // 1 - process purchase
+                        if (!watcherMode) {
+                            processPurchases(purchase, productType)
+                        }
+                        // 2 - call delegate
+                        delegate.onPlayBillingPurchasePurchase(purchase, productType)
                     }
                 }
 
                 // 3 - call continuation
-                purchase.skus
-                    .intersect(purchasingCallbacks.keys)
-                    .onEach {
-                        purchasingCallbacks.remove(it)
-                            ?.takeIf { c -> c.context.isActive }
+                purchase.products.intersect(purchasingCallbacks.keys).onEach {
+                        purchasingCallbacks.remove(it)?.takeIf { c -> c.context.isActive }
                             ?.also { c -> c.resume(PlayBillingResource.Success(purchase)) }
                     }
             }
@@ -91,8 +101,7 @@ internal class PlayBillingClientWrapper(
 
     internal suspend fun queryPurchaseHistory(
         types: Array<String> = arrayOf(
-            INAPP,
-            SUBS
+            INAPP, SUBS
         )
     ): PlayBillingResource<List<PurchaseHistoryRecord>> = withClientReady {
         val purchases = mutableListOf<PurchaseHistoryRecord>()
@@ -109,8 +118,7 @@ internal class PlayBillingClientWrapper(
 
     internal suspend fun queryPurchase(
         types: Array<String> = arrayOf(
-            INAPP,
-            SUBS
+            INAPP, SUBS
         )
     ): PlayBillingResource<List<Purchase>> = withClientReady {
         val purchases = mutableListOf<Purchase>()
@@ -127,23 +135,21 @@ internal class PlayBillingClientWrapper(
 
     internal suspend fun querySkuDetails(skuList: Set<String>): PlayBillingResource<List<SkuDetails>> =
         withClientReady {
-            val inApp = SkuDetailsParams.newBuilder()
-                .setSkusList(skuList.toList())
-                .setType(INAPP)
-                .build().let {
-                    billingClient.querySkuDetails(it)
-                }
+            val inApp =
+                SkuDetailsParams.newBuilder().setSkusList(skuList.toList()).setType(INAPP).build()
+                    .let {
+                        billingClient.querySkuDetails(it)
+                    }
 
             if (!inApp.billingResult.isOk()) {
                 return@withClientReady PlayBillingResource.Error(inApp.billingResult)
             }
 
-            val subs = SkuDetailsParams.newBuilder()
-                .setSkusList(skuList.toList())
-                .setType(SUBS)
-                .build().let {
-                    billingClient.querySkuDetails(it)
-                }
+            val subs =
+                SkuDetailsParams.newBuilder().setSkusList(skuList.toList()).setType(SUBS).build()
+                    .let {
+                        billingClient.querySkuDetails(it)
+                    }
 
             if (!subs.billingResult.isOk()) {
                 return@withClientReady PlayBillingResource.Error(inApp.billingResult)
@@ -163,20 +169,15 @@ internal class PlayBillingClientWrapper(
             if (purchaseToken.isEmpty()) {
                 return PlayBillingResource.Error(
                     BillingResult.newBuilder()
-                        .setResponseCode(BillingClient.BillingResponseCode.ITEM_NOT_OWNED)
-                        .build()
+                        .setResponseCode(BillingClient.BillingResponseCode.ITEM_NOT_OWNED).build()
                 )
             }
 
-            paramsBuilder
-                .setSkuDetails(sku)
-                .setSubscriptionUpdateParams(
-                    BillingFlowParams.SubscriptionUpdateParams
-                        .newBuilder()
-                        .setOldSkuPurchaseToken(purchaseToken)
-                        .setReplaceSkusProrationMode(proration.mode)
-                        .build()
-                )
+            paramsBuilder.setSkuDetails(sku).setSubscriptionUpdateParams(
+                BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                    .setOldSkuPurchaseToken(purchaseToken)
+                    .setReplaceSkusProrationMode(proration.mode).build()
+            )
         }
         accountId?.let {
             paramsBuilder.setObfuscatedAccountId(it)
@@ -189,9 +190,8 @@ internal class PlayBillingClientWrapper(
     internal suspend fun acknowledgeToken(purchaseToken: String): PlayBillingResource<String?> =
         withClientReady {
             Logger.logDebug("acknowledgeToken of SUBS product - ${Thread.currentThread().name}")
-            val param = AcknowledgePurchaseParams.newBuilder()
-                .setPurchaseToken(purchaseToken)
-                .build()
+            val param =
+                AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchaseToken).build()
             val res = billingClient.acknowledgePurchase(param)
             if (res.isOk()) {
                 return@withClientReady PlayBillingResource.Success(purchaseToken)
@@ -204,9 +204,7 @@ internal class PlayBillingClientWrapper(
     internal suspend fun consumeToken(purchaseToken: String): PlayBillingResource<String?> =
         withClientReady {
             Logger.logDebug("consumeToken of INAPP product - ${Thread.currentThread().name}")
-            val param = ConsumeParams.newBuilder()
-                .setPurchaseToken(purchaseToken)
-                .build()
+            val param = ConsumeParams.newBuilder().setPurchaseToken(purchaseToken).build()
             val res = billingClient.consumePurchase(param)
             if (res.billingResult.isOk()) {
                 return@withClientReady PlayBillingResource.Success(res.purchaseToken)
@@ -219,82 +217,82 @@ internal class PlayBillingClientWrapper(
     //// UTILS
 
     private suspend fun purchase(
-        activity: Activity,
-        sku: SkuDetails,
-        params: BillingFlowParams
+        activity: Activity, sku: SkuDetails, params: BillingFlowParams
     ): PlayBillingResource<Purchase> {
-        Logger.logDebug("purchaseSku - -1 - ${Thread.currentThread().name}")
+        Logger.logDebug("purchaseSku - 0 - ${Thread.currentThread().name}")
         if (purchasingSku.contains(sku.sku)) {
-            val err = BillingResult.newBuilder()
-                .setResponseCode(PURCHASING)
-                .setDebugMessage("Already Purchasing...")
-                .build()
+            val err = BillingResult.newBuilder().setResponseCode(PURCHASING)
+                .setDebugMessage("Already Purchasing...").build()
             return PlayBillingResource.Error(err)
         }
         purchasingSku[sku.sku] = sku.type
-        Logger.logDebug("purchaseSku - 0 - ${Thread.currentThread().name}")
+        Logger.logDebug("purchaseSku - 1 - ${Thread.currentThread().name}")
 
         withContext(Dispatchers.Main) {
-            Logger.logDebug("purchaseSku - 1 - ${Thread.currentThread().name}")
+            Logger.logDebug("purchaseSku - 2 - ${Thread.currentThread().name}")
             billingClient.launchBillingFlow(activity, params)
-        }.takeIf { !it.isOk() }
-            ?.let {
-                Logger.logDebug("purchaseSku - 2 fail - ${Thread.currentThread().name}")
-                purchasingSku.remove(sku.sku)
-                return@purchase PlayBillingResource.Error(it)
-            }
+        }.takeIf { !it.isOk() }?.let {
+            Logger.logDebug("purchaseSku - 3 fail - ${Thread.currentThread().name}")
+            purchasingSku.remove(sku.sku)
+            return@purchase PlayBillingResource.Error(it)
+        }
 
         suspendCoroutine<PlayBillingResource<Purchase>> {
-            Logger.logDebug("purchaseSku - 2 - ${Thread.currentThread().name}")
+            Logger.logDebug("purchaseSku - 3 - ${Thread.currentThread().name}")
             purchasingCallbacks[sku.sku] = it
         }.also {
-            Logger.logDebug("purchaseSku - 3 - ${Thread.currentThread().name}")
+            Logger.logDebug("purchaseSku - 4 - ${Thread.currentThread().name}")
             purchasingSku.remove(sku.sku)
 
             return@purchase it
         }
     }
 
-    private suspend fun processPurchases(p: Purchase): PlayBillingResource<String?>? {
-        Logger.logDebug("processPurchase - state:${p.purchaseState} ; ack:${p.isAcknowledged} - ${Thread.currentThread().name}")
+    private suspend fun findProductsType(products: List<String>): String? =
+        purchasingSku.firstNotNullOfOrNull { it.takeIf { products.contains(it.key) } }?.value
+            ?: querySkuDetails(products.toSet()).data?.firstOrNull()?.type
 
-        var type =
-            purchasingSku.firstNotNullOfOrNull { it.takeIf { p.skus.contains(it.key) } }?.value
-        if (type == null) {
-            val result = querySkuDetails(p.skus.toSet())
-            if (result.err != null) return PlayBillingResource.Error(result.err)
-            type = result.data?.firstOrNull()?.type
-        }
+    private suspend fun processPurchases(
+        p: Purchase, type: String
+    ): PlayBillingResource<String?>? {
+        Logger.logDebug("processPurchase - state:${p.purchaseState} ; ack:${p.isAcknowledged} - ${Thread.currentThread().name}")
 
         return when (type) {
             INAPP -> consumeToken(p.purchaseToken)
-            SUBS -> if (!p.isAcknowledged) acknowledgeToken(p.purchaseToken) else null
+            SUBS -> {
+                if (!p.isAcknowledged) {
+                    acknowledgeToken(p.purchaseToken)
+                } else {
+                    null
+                }
+            }
+
             else -> {
-                Logger.logError("UNKNOWN SKU - ${p.skus} - ${Thread.currentThread().name}"); null
+                Logger.logError("UNKNOWN PRODUCT TYPE - ${Thread.currentThread().name}"); null
             }
         }
     }
 
+
     private suspend fun <T> withClientReady(
         block: suspend () -> PlayBillingResource<T>
-    ): PlayBillingResource<T> = billingClient.isReady
-        .let {
-            if (it) return block()
+    ): PlayBillingResource<T> = billingClient.isReady.let {
+        if (it) return block()
 
-            var retryCount = 0
-            var connectionResult: BillingResult
-            do {
-                delay(BACKOFF_RECONNECTION_MS * retryCount)
-                connectionResult = billingConnectionMutex.withLock {
-                    startConnectionSync(billingClient)
-                }
-                retryCount += 1
-            } while (!connectionResult.isOk() && retryCount < MAX_RECONNECTION_RETRIES)
+        var retryCount = 0
+        var connectionResult: BillingResult
+        do {
+            delay(BACKOFF_RECONNECTION_MS * retryCount)
+            connectionResult = billingConnectionMutex.withLock {
+                startConnectionSync(billingClient)
+            }
+            retryCount += 1
+        } while (!connectionResult.isOk() && retryCount < MAX_RECONNECTION_RETRIES)
 
-            return if (connectionResult.isOk()) block() else PlayBillingResource.Error(
-                connectionResult
-            )
-        }
+        return if (connectionResult.isOk()) block() else PlayBillingResource.Error(
+            connectionResult
+        )
+    }
 
     private suspend fun startConnectionSync(bc: BillingClient): BillingResult =
         suspendCancellableCoroutine { c ->

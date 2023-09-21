@@ -70,6 +70,7 @@ dependencies {
     implementation("com.android.billingclient:billing-ktx:5.2.1")
 
     // Retrofit + OKHttp + Moshi
+//    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.squareup.moshi:moshi:1.15.0")
