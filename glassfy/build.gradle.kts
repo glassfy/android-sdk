@@ -60,17 +60,16 @@ android {
 
 dependencies {
     // Lifecycle
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.4.1")
-    implementation("androidx.lifecycle:lifecycle-process:2.4.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-process:2.6.1")
 
     // Android Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
 
     // BillingClient
-    implementation("com.android.billingclient:billing-ktx:5.2.1")
+    implementation("com.android.billingclient:billing-ktx:6.0.1")
 
     // Retrofit + OKHttp + Moshi
-//    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.squareup.moshi:moshi:1.15.0")
@@ -81,8 +80,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.6.4")
 
-    androidTestImplementation("androidx.test.ext:junit:1.1.3")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.4.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
 // Sources

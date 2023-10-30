@@ -1,4 +1,4 @@
-package io.glassfy.androidsdk.internal.billing.google
+package io.glassfy.androidsdk.internal.billing.play.legacy
 
 import android.app.Activity
 import android.content.Context
@@ -21,7 +21,9 @@ import com.android.billingclient.api.queryPurchaseHistory
 import com.android.billingclient.api.queryPurchasesAsync
 import com.android.billingclient.api.querySkuDetails
 import io.glassfy.androidsdk.Glassfy
-import io.glassfy.androidsdk.internal.billing.google.PlayBillingService.Companion.PURCHASING
+import io.glassfy.androidsdk.GlassfyErrorCode
+import io.glassfy.androidsdk.internal.billing.play.IPlayBillingPurchaseDelegate
+import io.glassfy.androidsdk.internal.billing.play.PlayBillingResource
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.model.SubscriptionUpdate
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +38,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-internal class PlayBillingClientWrapper(
+internal class PlayBilling4ClientWrapper(
     ctx: Context,
     private val delegate: IPlayBillingPurchaseDelegate,
     private val watcherMode: Boolean
@@ -79,9 +81,9 @@ internal class PlayBillingClientWrapper(
 
                 // 3 - call continuation
                 purchase.products.intersect(purchasingCallbacks.keys).onEach {
-                        purchasingCallbacks.remove(it)?.takeIf { c -> c.context.isActive }
-                            ?.also { c -> c.resume(PlayBillingResource.Success(purchase)) }
-                    }
+                    purchasingCallbacks.remove(it)?.takeIf { c -> c.context.isActive }
+                        ?.also { c -> c.resume(PlayBillingResource.Success(purchase)) }
+                }
             }
         } else {
             Logger.logDebug("handlePurchasesUpdate result error - code:${billingResult.responseCode} ; msg:${billingResult.debugMessage} - ${Thread.currentThread().name}")
@@ -176,7 +178,7 @@ internal class PlayBillingClientWrapper(
             paramsBuilder.setSkuDetails(sku).setSubscriptionUpdateParams(
                 BillingFlowParams.SubscriptionUpdateParams.newBuilder()
                     .setOldSkuPurchaseToken(purchaseToken)
-                    .setReplaceSkusProrationMode(proration.mode).build()
+                    .setReplaceSkusProrationMode(replacement.prorationMode()).build()
             )
         }
         accountId?.let {
@@ -221,7 +223,8 @@ internal class PlayBillingClientWrapper(
     ): PlayBillingResource<Purchase> {
         Logger.logDebug("purchaseSku - 0 - ${Thread.currentThread().name}")
         if (purchasingSku.contains(sku.sku)) {
-            val err = BillingResult.newBuilder().setResponseCode(PURCHASING)
+            val err = BillingResult.newBuilder()
+                .setResponseCode(GlassfyErrorCode.Purchasing.internalCode!!)
                 .setDebugMessage("Already Purchasing...").build()
             return PlayBillingResource.Error(err)
         }

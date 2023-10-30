@@ -1,6 +1,6 @@
 package io.glassfy.androidsdk.model
 
-import java.util.*
+import java.util.Date
 
 data class PurchaseHistory(
     val productId: String,

@@ -17,5 +17,6 @@ internal data class OfferingsResponse(
     val error: ErrorDto?
 ) {
     @Throws(DTOException::class)
-    internal fun toOfferings():Offerings = Offerings((offerings ?: emptyList()).map { o -> o.toOffering() })
+    internal fun toOfferings(): Offerings =
+        Offerings((offerings ?: emptyList()).map { o -> o.toOffering() })
 }

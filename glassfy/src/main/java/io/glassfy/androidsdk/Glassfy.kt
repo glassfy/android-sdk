@@ -166,17 +166,6 @@ object Glassfy {
     }
 
     /**
-     * Fetch Sku
-     *
-     * @param identifier Store product identifier
-     * @param callback Completion callback with results
-     */
-    @JvmStatic
-    fun skuWithProductId(identifier: String, callback: SkuCallback) {
-        customScope.runAndPostResult(callback) { manager.skuWithProductId(identifier) }
-    }
-
-    /**
      * Chek permissions status of the user
      *
      * @param callback Completion callback with results

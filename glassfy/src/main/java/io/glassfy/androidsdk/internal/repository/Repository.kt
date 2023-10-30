@@ -219,36 +219,13 @@ internal class Repository(
         }
     }
 
-    override suspend fun skuByProductId(id: String): Resource<Sku> {
+    override suspend fun offerings(playBillingVersion: Int): Resource<Offerings> {
         return try {
-            val response = api.getSkuByProductId(id)
-            val result = response.body()
-            if (response.isSuccessful && result?.sku != null) {
-                Resource.Success(result.sku.toSku() as Sku)
+            val response = if (playBillingVersion >= 5) {
+                api.getOfferingsBilling5()
             } else {
-                val err =
-                    result?.error?.description?.let { GlassfyErrorCode.ServerError.toError(it) }
-                        ?: GlassfyErrorCode.UnknowError.toError(response.message())
-                Resource.Error(err)
+                api.getOfferingsBilling4()
             }
-        } catch (e: HttpException) {
-            Resource.Error(GlassfyErrorCode.HttpException.toError(e.message ?: e.toString()))
-        } catch (e: UnknownHostException) {
-            Resource.Error(GlassfyErrorCode.InternetConnection.toError(e.message ?: e.toString()))
-        } catch (e: IOException) {
-            Resource.Error(GlassfyErrorCode.IOException.toError(e.message ?: e.toString()))
-        } catch (e: JsonDataException) {
-            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
-        } catch (e: DTOException) {
-            Resource.Error(GlassfyErrorCode.ServerError.toError(e.message ?: e.toString()))
-        } catch (e: Exception) {
-            Resource.Error(GlassfyErrorCode.UnknowError.toError(e.message ?: e.toString()))
-        }
-    }
-
-    override suspend fun offerings(): Resource<Offerings> {
-        return try {
-            val response = api.getOfferings()
             val result = response.body()
             if (response.isSuccessful && result != null && result.error == null) {
                 Resource.Success(result.toOfferings())
@@ -310,8 +287,8 @@ internal class Repository(
                 val err =
                     result?.error?.description?.let {
                         when (result.error.code) {
-                            GlassfyErrorCode.LicenseAlreadyConnected.internalCode -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
-                            GlassfyErrorCode.LicenseNotFound.internalCode -> GlassfyErrorCode.LicenseNotFound.toError(it)
+                            GlassfyErrorCode.LicenseAlreadyConnected.internalCode!! -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
+                            GlassfyErrorCode.LicenseNotFound.internalCode!! -> GlassfyErrorCode.LicenseNotFound.toError(it)
                             else -> GlassfyErrorCode.ServerError.toError(it)
                         }
                     } ?: GlassfyErrorCode.UnknowError.toError(response.message())
@@ -342,8 +319,8 @@ internal class Repository(
                 val err =
                     result?.error?.description?.let {
                         when (result.error.code) {
-                            GlassfyErrorCode.UniversalCodeAlreadyConnected.internalCode -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
-                            GlassfyErrorCode.UniversalCodeNotFound.internalCode -> GlassfyErrorCode.LicenseNotFound.toError(it)
+                            GlassfyErrorCode.UniversalCodeAlreadyConnected.internalCode!! -> GlassfyErrorCode.LicenseAlreadyConnected.toError(it)
+                            GlassfyErrorCode.UniversalCodeNotFound.internalCode!! -> GlassfyErrorCode.LicenseNotFound.toError(it)
                             else -> GlassfyErrorCode.ServerError.toError(it)
                         }
                     } ?: GlassfyErrorCode.UnknowError.toError(response.message())

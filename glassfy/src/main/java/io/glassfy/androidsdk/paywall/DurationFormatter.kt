@@ -122,7 +122,7 @@ internal class DurationFormatter private constructor(
 
     @RequiresApi(Build.VERSION_CODES.N)
     fun unitName(): String? {
-        return DurationFormatter.unitName(unit)
+        return unitName(unit)
     }
 
     private val unit = bestUnit(weeks, months, years)

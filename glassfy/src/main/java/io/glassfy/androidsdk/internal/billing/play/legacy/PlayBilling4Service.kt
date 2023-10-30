@@ -1,4 +1,4 @@
-package io.glassfy.androidsdk.internal.billing.google
+package io.glassfy.androidsdk.internal.billing.play.legacy
 
 import android.app.Activity
 import android.content.Context
@@ -6,31 +6,38 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingResult
 import io.glassfy.androidsdk.GlassfyError
 import io.glassfy.androidsdk.GlassfyErrorCode
+import io.glassfy.androidsdk.PurchaseDelegate
 import io.glassfy.androidsdk.internal.billing.IBillingPurchaseDelegate
 import io.glassfy.androidsdk.internal.billing.IBillingService
+import io.glassfy.androidsdk.internal.billing.SkuDetailsQuery
+import io.glassfy.androidsdk.internal.billing.play.IPlayBillingPurchaseDelegate
+import io.glassfy.androidsdk.internal.billing.play.PlayBillingResource
 import io.glassfy.androidsdk.internal.logger.Logger
 import io.glassfy.androidsdk.internal.network.model.utils.Resource
 import io.glassfy.androidsdk.model.AccountIdentifiers
 import io.glassfy.androidsdk.model.HistoryPurchase
+import io.glassfy.androidsdk.model.ProductType
 import io.glassfy.androidsdk.model.Purchase
 import io.glassfy.androidsdk.model.SkuDetails
 import io.glassfy.androidsdk.model.SubscriptionUpdate
 
-internal class PlayBillingService(
+internal class PlayBilling4Service(
     override val delegate: IBillingPurchaseDelegate, ctx: Context, watcherMode: Boolean
 ) : IBillingService, IPlayBillingPurchaseDelegate {
 
-    companion object {
-        internal const val PURCHASING = -199
-    }
+    override val version: Int
+        get() = 4
 
-    private val billingClientWrapper = PlayBillingClientWrapper(ctx, this, watcherMode)
+
+    private var _delegate: PurchaseDelegate? = null
+
+    private val billingClientWrapper = PlayBilling4ClientWrapper(ctx, this, watcherMode)
 
     override suspend fun inAppPurchaseHistory(): Resource<List<HistoryPurchase>> =
         billingClientWrapper.queryPurchaseHistory(arrayOf(BillingClient.SkuType.INAPP)).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertHistoryPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -38,7 +45,7 @@ internal class PlayBillingService(
         billingClientWrapper.queryPurchaseHistory(arrayOf(BillingClient.SkuType.SUBS)).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertHistoryPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -46,7 +53,7 @@ internal class PlayBillingService(
         billingClientWrapper.queryPurchaseHistory().let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertHistoryPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -54,7 +61,7 @@ internal class PlayBillingService(
         billingClientWrapper.queryPurchase().let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -62,7 +69,7 @@ internal class PlayBillingService(
         billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.SUBS)).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -70,36 +77,51 @@ internal class PlayBillingService(
         billingClientWrapper.queryPurchase(arrayOf(BillingClient.SkuType.INAPP)).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(convertPurchases(it.data!!))
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
-    override suspend fun skuDetails(skuList: Set<String>): Resource<List<SkuDetails>> =
-        billingClientWrapper.querySkuDetails(skuList).let { billingRes ->
-            return when (billingRes) {
+    override suspend fun skuDetails(query: SkuDetailsQuery): Resource<SkuDetails> =
+        skusDetails(listOf(query)).let { res ->
+            when (res) {
+                is Resource.Success -> res.data?.firstOrNull()?.let {
+                    Resource.Success(it)
+                } ?: Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
+
+                is Resource.Error -> Resource.Error(res.err!!)
+            }
+        }
+
+    override suspend fun skusDetails(queries: List<SkuDetailsQuery>): Resource<List<SkuDetails>> {
+        val skuList = queries.map { it.productId }.toSet()
+        return billingClientWrapper.querySkuDetails(skuList).let { billingRes ->
+            when (billingRes) {
                 is PlayBillingResource.Success -> {
                     val skuDetails = convertSkusDetails(billingRes.data!!)
-                    val invalidProductIdentifiers =
-                        skuList.minus(skuDetails.map { it.sku }.toSet()).joinToString("\n\t")
-                    if (invalidProductIdentifiers.isNotEmpty()) {
-                        Logger.logDebug("PlayStore does not return details for the following products:\n\t${invalidProductIdentifiers}\nCheck the guide at 🔗 https://docs.glassfy.io/26293898")
-                    }
 
+                    val invalidProductIdentifiers = skuList.minus(skuDetails.map { it.sku }.toSet())
+                    if (invalidProductIdentifiers.isNotEmpty()) {
+                        val message = "PlayStore did not return details for the following products:"
+                        val docs =
+                            "Check the guide at \uD83D\uDD17 https://docs.glassfy.io/26293898"
+                        Logger.logDebug("$message\n\t${invalidProductIdentifiers.joinToString("\n\t")}\n$docs")
+                    }
                     return Resource.Success(skuDetails)
                 }
 
-                else -> Resource.Error(convertError(billingRes.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(billingRes.err!!))
             }
         }
+    }
 
     override suspend fun purchase(
-        activity: Activity, sku: SkuDetails, update: SubscriptionUpdate?, accountId: String?
+        activity: Activity, product: SkuDetails, update: SubscriptionUpdate?, accountId: String?
     ): Resource<Purchase> =
-        billingClientWrapper.purchaseSku(activity, convertToSkuDetails(sku), update, accountId)
+        billingClientWrapper.purchaseSku(activity, convertToSkuDetails(product), update, accountId)
             .let {
                 return when (it) {
                     is PlayBillingResource.Success -> Resource.Success(convertPurchase(it.data!!))
-                    else -> Resource.Error(convertError(it.err!!))
+                    is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
                 }
             }
 
@@ -107,7 +129,7 @@ internal class PlayBillingService(
         billingClientWrapper.consumeToken(purchaseToken).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(purchaseToken)
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -115,7 +137,7 @@ internal class PlayBillingService(
         billingClientWrapper.acknowledgeToken(purchaseToken).let {
             return when (it) {
                 is PlayBillingResource.Success -> Resource.Success(purchaseToken)
-                else -> Resource.Error(convertError(it.err!!))
+                is PlayBillingResource.Error -> Resource.Error(convertError(it.err!!))
             }
         }
 
@@ -146,7 +168,7 @@ internal class PlayBillingService(
         Purchase(
             convertAccountIdentifier(accountIdentifiers),
             developerPayload,
-            orderId,
+            orderId.orEmpty(), // orderId is null if purchaseState != PURCHASED
             packageName,
             purchaseState,
             purchaseTime,
@@ -177,30 +199,42 @@ internal class PlayBillingService(
 
     private fun convertSkuDetails(s: com.android.billingclient.api.SkuDetails) = s.run {
         SkuDetails(
-            description,
-            freeTrialPeriod,
-            iconUrl,
-            introductoryPrice,
-            introductoryPriceAmountMicros,
-            introductoryPriceCycles,
-            introductoryPricePeriod,
-            originalPrice,
-            originalPriceAmountMicros,
-            price,
-            priceAmountMicros,
-            priceCurrencyCode,
-            sku,
-            subscriptionPeriod,
-            title,
-            type,
-            hashCode(),
-            originalJson
+            description = description,
+            freeTrialPeriod = freeTrialPeriod,
+            iconUrl = iconUrl,
+            sku = sku,
+            subscriptionPeriod = subscriptionPeriod,
+            title = title,
+            type = convertSkuType(type),
+            basePlanId = "",
+            offerId = "",
+            offerToken = "",
+            hashCode = hashCode(),
+            introductoryPrice = introductoryPrice,
+            introductoryPriceAmountMicro = introductoryPriceAmountMicros,
+            introductoryPriceAmountCycles = introductoryPriceCycles,
+            introductoryPriceAmountPeriod = introductoryPricePeriod,
+            originalPrice = originalPrice,
+            originalPriceAmountMicro = originalPriceAmountMicros,
+            price = price,
+            priceAmountMicro = priceAmountMicros,
+            priceCurrencyCode = priceCurrencyCode,
+            originalJson = originalJson
         )
+    }
+
+    private fun convertSkuType(type: String) = when (type) {
+        BillingClient.SkuType.INAPP -> ProductType.INAPP
+        BillingClient.SkuType.SUBS -> ProductType.SUBS
+        else -> ProductType.UNKNOWN
     }
 
     private fun convertError(b: BillingResult): GlassfyError = b.run {
         return when (responseCode) {
-            PURCHASING -> GlassfyErrorCode.Purchasing.toError()
+            GlassfyErrorCode.Purchasing.internalCode!! -> GlassfyErrorCode.Purchasing.toError(
+                "Purchase already in progress..."
+            )
+
             BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> GlassfyErrorCode.ProductAlreadyOwned.toError(
                 "Failure to purchase since item is already owned (ITEM_ALREADY_OWNED)"
             )

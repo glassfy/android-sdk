@@ -9,18 +9,36 @@ import io.glassfy.androidsdk.model.*
 internal data class SkuDto(
     @field:Json(name = "identifier")
     val identifier: String?,
+
     @field:Json(name = "productid")
     val productId: String?,
+
     @field:Json(name = "store")
     val store: Store?,
+
     @field:Json(name = "extravars")
     val extravars: Map<String, String>?,
+
     @field:Json(name = "name")
     val name: String?,
+
     @field:Json(name = "recurringprice")
     val initialprice: PaddlePriceDto?,
+
     @field:Json(name = "initialprice")
     val recurringprice: PaddlePriceDto?,
+
+    @field:Json(name = "baseplan")
+    val basePlanId: String?,
+
+    @field:Json(name = "offerid")
+    val offerId: String?,
+
+    @field:Json(name = "type")
+    val productType: ProductType?,
+
+    @field:Json(name = "fallbacksku")
+    val fallbackSku: SkuDetailsParamsDto?,
 ) {
     @Throws(DTOException::class)
     internal fun toSku(offeringId: String? = null): ISkuBase {
@@ -45,15 +63,20 @@ internal data class SkuDto(
                 )
             }
             Store.PlayStore -> {
-                if (identifier.isEmpty() || productId.isEmpty()) {
+                if (identifier.isBlank() || productId.isBlank()) {
                     throw DTOException("Missing sku identifier/productId")
                 }
-
                 Sku(
                     identifier,
-                    productId,
                     extravars ?: emptyMap(),
-                    offeringId
+                    offeringId,
+                    SkuDetailsParams(
+                        productId,
+                        basePlanId?.ifBlank { null },
+                        offerId?.ifBlank { null },
+                        productType ?: ProductType.UNKNOWN
+                    ),
+                    fallbackSku?.toSkuDetailsParams(productType ?: ProductType.UNKNOWN)
                 )
             }
             else -> SkuBase(identifier, productId, store)

@@ -17,14 +17,14 @@ internal interface IApiService {
         @Query("pricelocale") locale: String
     ): Response<SkuResponse>
 
-    @GET("/v0/sku")
-    suspend fun getSkuByProductId(@Query("productid") productid: String): Response<SkuResponse>
-
     @POST("/v0/init")
     suspend fun initialize(@Body body: InitializeRequest): Response<InitializeResponse>
 
     @GET("/v0/offerings")
-    suspend fun getOfferings(): Response<OfferingsResponse>
+    suspend fun getOfferingsBilling4(): Response<OfferingsResponse>
+
+    @GET("/v1/offerings")
+    suspend fun getOfferingsBilling5(): Response<OfferingsResponse>
 
     @POST("/v1/token")
     suspend fun postToken(@Body token: TokenRequest): Response<TransactionResponse>

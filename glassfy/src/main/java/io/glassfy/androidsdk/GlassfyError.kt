@@ -6,7 +6,7 @@ enum class GlassfyErrorCode(internal val internalCode: Int? = null) {
     SDKNotInitialized,
     MissingPurchase,
     PendingPurchase,
-    Purchasing,
+    Purchasing(-199),
 
     StoreError,
     UserCancelPurchase,

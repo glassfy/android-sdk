@@ -45,7 +45,7 @@ class GlassfyTest {
     fun `Offering no initialize`() {
         var _offerings: Offerings? = null
         var _error: GlassfyError? = null
-        Glassfy.offerings() { result, error ->
+        Glassfy.offerings { result, error ->
             assertEquals(Thread.currentThread().id, mainThreadId)
 
             _offerings = result

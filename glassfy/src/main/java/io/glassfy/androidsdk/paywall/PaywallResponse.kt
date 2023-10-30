@@ -40,8 +40,7 @@ internal data class PaywallResponse(
         }
 
         val skuList = skus?.mapNotNull {
-            val sku = it.toSku(paywall.pwid)
-            if (sku is Sku) sku else null
+            it.toSku(paywall.pwid) as? Sku
         } ?: emptyList()
 
         return Paywall(

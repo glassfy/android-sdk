@@ -12,8 +12,7 @@ import io.glassfy.androidsdk.paywall.Paywall
 internal interface IRepository {
     suspend fun skuByIdentifier(id: String): Resource<Sku>
     suspend fun skuByIdentifierAndStore(id: String, store: Store): Resource<ISkuBase>
-    suspend fun skuByProductId(id: String): Resource<Sku>
-    suspend fun offerings(): Resource<Offerings>
+    suspend fun offerings(playBillingVersion: Int): Resource<Offerings>
     suspend fun token(token: TokenRequest): Resource<Transaction>
     suspend fun permissions(): Resource<Permissions>
     suspend fun lastSeen(): Resource<Unit>

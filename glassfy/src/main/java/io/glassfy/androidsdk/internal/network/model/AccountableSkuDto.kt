@@ -12,6 +12,10 @@ data class AccountableSkuDto(
     val identifier: String?,
     @field:Json(name = "productid")
     val productId: String?,
+    @field:Json(name = "baseplan")
+    val baseplanId: String?,
+    @field:Json(name = "offerId")
+    val offerId: String?,
     @field:Json(name = "isinintrooffer")
     val isInIntroOfferPeriod: Boolean?,
     @field:Json(name = "istrial")
@@ -26,6 +30,8 @@ data class AccountableSkuDto(
         } else {
             AccountableSku(identifier,
                 productId,
+                baseplanId?.ifEmpty { null },
+                offerId?.ifEmpty { null },
                 isInIntroOfferPeriod ?: false,
                 isInTrialPeriod ?: false,
                 store)

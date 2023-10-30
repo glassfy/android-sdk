@@ -8,13 +8,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.Purchase.PurchaseState.PURCHASED
 import com.squareup.moshi.Moshi
-import io.glassfy.androidsdk.*
+import io.glassfy.androidsdk.Glassfy
+import io.glassfy.androidsdk.GlassfyErrorCode
+import io.glassfy.androidsdk.LogLevel
+import io.glassfy.androidsdk.PurchaseDelegate
 import io.glassfy.androidsdk.internal.billing.IBillingPurchaseDelegate
 import io.glassfy.androidsdk.internal.billing.IBillingService
-import io.glassfy.androidsdk.internal.billing.google.PlayBillingService
+import io.glassfy.androidsdk.internal.billing.SkuDetailsQuery
+import io.glassfy.androidsdk.internal.billing.play.PlayBillingServiceProvider
 import io.glassfy.androidsdk.internal.cache.CacheManager
 import io.glassfy.androidsdk.internal.cache.ICacheManager
 import io.glassfy.androidsdk.internal.device.DeviceManager
@@ -113,7 +116,7 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
         val deviceManager: IDeviceManager = DeviceManager(appContext.applicationContext)
         val apiService: IApiService = makeApiService(cacheManager, deviceManager, apiKey)
         repository = Repository(apiService)
-        billingService = PlayBillingService(this, appContext, watcherMode)
+        billingService = PlayBillingServiceProvider.billingService(this, appContext, watcherMode)
 
         val res = _initialize(crossPlatformSdkFramework, crossPlatformSdkVersion)
         if (res.err != null) {
@@ -151,13 +154,10 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
     internal suspend fun restore(): Resource<Permissions> = withSdkInitializedOrError { _restore() }
 
     internal suspend fun sku(identifier: String): Resource<Sku> =
-        withSdkInitializedOrError { _playstoresku(identifier) }
+        withSdkInitializedOrError { _playStoreSku(identifier) }
 
     internal suspend fun skubase(identifier: String, store: Store): Resource<out ISkuBase> =
         withSdkInitializedOrError { _skubase(identifier, store) }
-
-    internal suspend fun skuWithProductId(identifier: String): Resource<Sku> =
-        withSdkInitializedOrError { _skuWithProductId(identifier) }
 
     internal suspend fun offerings(): Resource<Offerings> =
         withSdkInitializedOrError { _offerings() }
@@ -281,51 +281,93 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
     }
 
     private suspend fun _offerings(): Resource<Offerings> {
-        val offRes = repository.offerings()
+        val offRes = repository.offerings(billingService.version)
         if (offRes.err != null) return offRes
         if (offRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-        val detailRes = offRes.data.all.flatMap { it.skus.map { s -> s.productId } }.toSet()
-            .let { billingService.skuDetails(it) }
-        if (detailRes.err != null) return Resource.Error(detailRes.err)
-        if (detailRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
+        val queries =
+            offRes.data.all.flatMap { off -> SkuDetailsQuery.fromSkus(off.skus) }.distinct()
 
+        val detailRes = billingService.skusDetails(queries).data ?: emptyList()
         for (o in offRes.data.all) {
-            o.skus_ = o.skus.filter { sku -> detailRes.data.map { it.sku }.contains(sku.productId) }
-                .map { s ->
-                    detailRes.data.find { detail -> detail.sku == s.productId }
-                        ?.let { detail -> s.product = detail }
-                    return@map s
+            o.skus_ = o.skus.mapNotNull { s ->
+                matchSkuWithStoreDetails(s, detailRes)?.let {
+                    s.apply {
+                        product = it
+                    }
                 }
+            }
         }
-        return offRes
+        return Resource.Success(offRes.data)
+    }
+
+    private fun matchSkuWithStoreDetails(s: Sku, storeDetails: List<SkuDetails>) =
+        matchSkuWithStoreDetailsAndFallback(s, storeDetails)
+
+    private fun matchSkuWithStoreDetailsAndFallback(
+        s: Sku, storeDetails: List<SkuDetails>
+    ): SkuDetails? {
+        return storeDetails.find {
+            it.sku == s.skuParams.productId && it.basePlanId == s.skuParams.basePlanId.orEmpty() && it.offerId == s.skuParams.offerId.orEmpty()
+        }?.also {
+            Logger.logDebug(
+                "Sku Found ${s.skuId}: " + "\t${s.skuParams.productId} - ${s.skuParams.basePlanId} - ${s.skuParams.offerId}"
+            )
+        } ?: storeDetails.find {
+            it.sku == s.fallbackSkuParams?.productId && it.basePlanId == s.fallbackSkuParams.basePlanId.orEmpty() && it.offerId == s.fallbackSkuParams.offerId.orEmpty()
+        }.also {
+            if (it == null) {
+                Logger.logDebug(
+                    "Sku NOT Found ${s.skuId}: " + "\t${s.skuParams.productId} - ${s.skuParams.basePlanId} - ${s.skuParams.offerId}"
+                )
+            } else {
+                Logger.logDebug(
+                    "Sku Fallback ${s.skuId}: " + "\n\t${s.skuParams.productId} - ${s.skuParams.basePlanId} - ${s.skuParams.offerId}" + "\n\t" +
+                            "${it.sku} - ${it.basePlanId.ifEmpty { null }} - ${it.offerId.ifEmpty { null }}"
+                )
+            }
+        }
     }
 
     private suspend fun _purchase(
         activity: Activity, sku: Sku, upgradeSku: SubscriptionUpdate?, accountId: String?
     ): Resource<Transaction> {
         if (upgradeSku != null) {
+            val purchases = billingService.allPurchases()
+            if (purchases.err != null) return Resource.Error(purchases.err)
+
             val res = repository.skuByIdentifier(upgradeSku.originalSku)
             if (res.err != null) return Resource.Error(res.err)
 
-            val purchases = billingService.allPurchases()
-            if (purchases.err != null) return Resource.Error(purchases.err)
-            purchases.data?.firstOrNull { it.skus.contains(res.data?.productId ?: "") }
-                ?.let { upgradeSku.purchaseToken = it.purchaseToken }
+            listOfNotNull(
+                res.data?.skuParams?.productId, res.data?.fallbackSkuParams?.productId
+            ).firstNotNullOfOrNull { purchasedProduct ->
+                purchases.data?.firstOrNull { purchase ->
+                    purchase.skus.contains(purchasedProduct)
+                }
+            }?.also { purchase ->
+                upgradeSku.purchaseToken = purchase.purchaseToken
+            }
 
             if (upgradeSku.purchaseToken.isEmpty()) {
-                return Resource.Error(GlassfyErrorCode.MissingPurchase.toError("purchaseToken not found for ${upgradeSku.originalSku}"))
+                return Resource.Error(
+                    GlassfyErrorCode.MissingPurchase.toError(
+                        "purchaseToken not found for ${upgradeSku.originalSku}"
+                    )
+                )
             }
         }
 
-        val result = billingService.purchase(activity, sku.product, upgradeSku, accountId)
+        val result = billingService.purchase(
+            activity, sku.product, upgradeSku, accountId
+        )
         if (result.err != null) return Resource.Error(result.err)
         if (result.data == null) return Resource.Error(GlassfyErrorCode.MissingPurchase.toError())
         if (result.data.purchaseState != PURCHASED) return Resource.Error(GlassfyErrorCode.PendingPurchase.toError())
 
         return result.data.let { p ->
-            val tokenReq = TokenRequest.from(p, sku.product.type == BillingClient.SkuType.SUBS)
-            tokenReq.offeringId = sku.offeringId
+            val tokenReq = TokenRequest.from(p, sku.isSubscription(), sku.offeringId, sku.product)
+
             repository.token(tokenReq).apply {
                 data?.permissions?.installationId_ = cacheManager.installationId
             }
@@ -346,7 +388,7 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
 
     private suspend fun _skubase(identifier: String, store: Store): Resource<out ISkuBase> {
         if (store == Store.PlayStore) {
-            return _playstoresku(identifier)
+            return _playStoreSku(identifier)
         }
 
         val skuRes = repository.skuByIdentifierAndStore(identifier, store)
@@ -355,40 +397,19 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
         return Resource.Success(skuRes.data)
     }
 
-    private suspend fun _playstoresku(identifier: String): Resource<Sku> {
+    private suspend fun _playStoreSku(identifier: String): Resource<Sku> {
         val skuRes = repository.skuByIdentifier(identifier)
         if (skuRes.err != null) return skuRes
         if (skuRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-        return skuRes.data.let {
-            val detailRes = billingService.skuDetails(setOf(it.productId))
-            if (detailRes.err != null) return Resource.Error(detailRes.err)
-            if (detailRes.data.isNullOrEmpty()) return Resource.Error(
-                GlassfyErrorCode.NotFoundOnStore.toError()
-            )
+        val detailRes = billingService.skusDetails(SkuDetailsQuery.fromSku(skuRes.data))
+        if (detailRes.err != null) return Resource.Error(detailRes.err)
+        if (detailRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-            Resource.Success(it.apply {
-                product = detailRes.data.first()
-            })
-        }
-    }
-
-    private suspend fun _skuWithProductId(identifier: String): Resource<Sku> {
-        val skuRes = repository.skuByProductId(identifier)
-        if (skuRes.err != null) return skuRes
-        if (skuRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
-
-        return skuRes.data.let {
-            val detailRes = billingService.skuDetails(setOf(it.productId))
-            if (detailRes.err != null) return Resource.Error(detailRes.err)
-            if (detailRes.data.isNullOrEmpty()) return Resource.Error(
-                GlassfyErrorCode.NotFoundOnStore.toError()
-            )
-
-            Resource.Success(it.apply {
-                product = detailRes.data.first()
-            })
-        }
+        return matchSkuWithStoreDetails(skuRes.data, detailRes.data)?.let {
+            skuRes.data.product = it
+            Resource.Success(skuRes.data)
+        } ?: Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
     }
 
     private suspend fun _connectCustomSubscriber(customId: String?): Resource<Unit> {
@@ -418,22 +439,21 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
         if (pRes.err != null) return Resource.Error(pRes.err)
         if (pRes.data == null || pRes.data.skus.isEmpty()) return Resource.Error(GlassfyErrorCode.NotFoundOnGlassfy.toError())
 
-        val dRes =
-            pRes.data.skus.map { s -> s.productId }.toSet().let { billingService.skuDetails(it) }
+        val dRes = billingService.skusDetails(SkuDetailsQuery.fromSkus(pRes.data.skus))
         if (dRes.err != null) return Resource.Error(dRes.err)
         if (dRes.data == null) return Resource.Error(GlassfyErrorCode.NotFoundOnStore.toError())
 
-        pRes.data.skus =
-            pRes.data.skus.filter { sku -> dRes.data.map { it.sku }.contains(sku.productId) }
-        pRes.data.skus.forEach { s ->
-            dRes.data.find { detail -> detail.sku == s.productId }
-                ?.let { detail -> s.product = detail }
+        pRes.data.skus = pRes.data.skus.mapNotNull { s ->
+            matchSkuWithStoreDetails(s, dRes.data)?.let {
+                s.apply {
+                    product = it
+                }
+            }
         }
-
         return Resource.Success(pRes.data)
     }
 
-    /// LifecycleEventObserver
+/// LifecycleEventObserver
 
     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
         when (event) {
@@ -450,7 +470,7 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
     private suspend fun onStartProcessState() = withSdkInitialized()?.also { repository.lastSeen() }
 
 
-    /// Utils
+/// Utils
 
     private fun makeApiService(
         cacheManager: ICacheManager, deviceManager: IDeviceManager, apiKey: String
@@ -466,11 +486,14 @@ internal class GManager : LifecycleEventObserver, IBillingPurchaseDelegate {
                 val r = c.request().newBuilder().header("Authorization", "Bearer $apiKey").url(url)
                     .build()
                 c.proceed(r)
-            }.build()
+            }
+//            .addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
+            .build()
 
         val moshi =
-            Moshi.Builder().add(EntitlementAdapter()).add(StoreAdapter()).add(StoreInfoAdapter())
-                .add(EventTypeAdapter()).add(UserPropertiesAdapter()).add(PaywallTypeAdapter())
+            Moshi.Builder().add(EntitlementAdapter()).add(ProductTypeAdapter()).add(StoreAdapter())
+                .add(StoreInfoAdapter()).add(EventTypeAdapter()).add(UserPropertiesAdapter())
+                .add(PaywallTypeAdapter())
                 // .addLast(KotlinJsonAdapterFactory()) if not using Codegen, use Reflection (2.5 MiB .jar file)
                 .build()
 

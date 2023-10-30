@@ -22,9 +22,8 @@ internal data class OfferingDto(
         }
 
         val skuList = skus?.mapNotNull {
-            val sku = it.toSku(identifier)
-            if (sku is Sku) sku else null
-        }
-        return Offering(identifier, skuList ?: emptyList())
+            it.toSku(identifier) as? Sku
+        }.orEmpty()
+        return Offering(identifier, skuList)
     }
 }

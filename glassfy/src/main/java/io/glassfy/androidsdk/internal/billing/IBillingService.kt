@@ -8,20 +8,23 @@ import io.glassfy.androidsdk.model.SkuDetails
 import io.glassfy.androidsdk.model.SubscriptionUpdate
 
 internal interface IBillingService {
+    val version: Int
     val delegate: IBillingPurchaseDelegate
-    suspend fun allPurchaseHistory(): Resource<List<HistoryPurchase>>
+
     suspend fun inAppPurchaseHistory(): Resource<List<HistoryPurchase>>
     suspend fun subsPurchaseHistory(): Resource<List<HistoryPurchase>>
+    suspend fun allPurchaseHistory(): Resource<List<HistoryPurchase>>
 
-    suspend fun allPurchases(): Resource<List<Purchase>>
     suspend fun inAppPurchases(): Resource<List<Purchase>>
     suspend fun subsPurchases(): Resource<List<Purchase>>
-
-    suspend fun skuDetails(skuList: Set<String>): Resource<List<SkuDetails>>
+    suspend fun allPurchases(): Resource<List<Purchase>>
+    
+    suspend fun skuDetails(query: SkuDetailsQuery): Resource<SkuDetails>
+    suspend fun skusDetails(queries: List<SkuDetailsQuery>): Resource<List<SkuDetails>>
 
     suspend fun purchase(
         activity: Activity,
-        sku: SkuDetails,
+        product: SkuDetails,
         update: SubscriptionUpdate? = null,
         accountId: String? = null
     ): Resource<Purchase>
