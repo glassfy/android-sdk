@@ -35,3 +35,11 @@ data class StoreInfoPaddle(
             }
         }
 }
+
+data class StoreInfoStripe(
+    override val rawData: Map<String, Any>
+) : StoreInfo(Store.Stripe, rawData) {
+    val customerId: String? get() = rawData["customerid"] as? String
+    val subscriptionId: String? get() = rawData["subscriptionid"] as? String
+    val producId: String? get() = rawData["productid"] as? String
+}
